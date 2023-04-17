@@ -21,6 +21,9 @@ export class DreoPlatform implements DynamicPlatformPlugin {
     public readonly api: API,
   ) {
     this.log.debug('Finished initializing platform:', this.config.name);
+    const email = config.options.email;
+    const password = config.options.password;
+    this.log.debug('email, password', email, password);
 
     // When this event is fired it means Homebridge has restored all cached accessories from disk.
     // Dynamic Platform plugins should only register new accessories after this event was fired,

@@ -1,5 +1,5 @@
 {
-  "pluginAlias": "Homebridge Dreo",
+  "pluginAlias": "DreoPlatform",
   "pluginType": "platform",
   "singular": true,
   "schema": {
@@ -9,7 +9,25 @@
         "title": "Name",
         "type": "string",
         "required": true,
-        "default": "Example Dynamic Platform"
+        "default": "Dreo Platform",
+        "description": "You shouldn't need to change this."
+      },
+      "options": {
+        "title": "Dreo App Login",
+        "type": "object",
+        "required": true,
+        "properties": {
+          "email": {
+            "title": "Email",
+            "type": "string",
+            "required": true
+          },
+          "password": {
+            "title": "Password",
+            "type": "string",
+            "required": true
+          }
+        }
       }
     }
   }
