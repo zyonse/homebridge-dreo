@@ -2,6 +2,7 @@ import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, 
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { FanAccessory } from './platformAccessory';
+import axios from 'axios';
 
 /**
  * HomebridgePlatform
@@ -23,7 +24,6 @@ export class DreoPlatform implements DynamicPlatformPlugin {
     this.log.debug('Finished initializing platform:', this.config.name);
     const email = config.options.email;
     const password = config.options.password;
-    this.log.debug('email, password', email, password);
 
     // When this event is fired it means Homebridge has restored all cached accessories from disk.
     // Dynamic Platform plugins should only register new accessories after this event was fired,
@@ -53,7 +53,21 @@ export class DreoPlatform implements DynamicPlatformPlugin {
    * must not be registered again to prevent "duplicate UUID" errors.
    */
   discoverDevices() {
-
+    (async () => {
+      const remote = await axios.get('https://www.dreo-cloud.com/access/endpoint', {
+        params: {
+          'timestamp': Date.now(),
+        },
+        headers: {
+          'country': 'US',
+          'ua': 'dreo/2.0.7 (sdk_gphone64_x86_64;android 13;Scale/2.625)',
+          'lang': 'en',
+          'accept-encoding': 'gzip',
+          'user-agent': 'okhttp/4.9.1',
+        },
+      });
+      this.log.debug('request results:', remote);
+    })();
     // EXAMPLE ONLY
     // A real plugin you would discover accessories from the local network, cloud services
     // or a user-defined array in the platform config.
