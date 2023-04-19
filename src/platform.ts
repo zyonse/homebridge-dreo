@@ -2,7 +2,7 @@ import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, 
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { FanAccessory } from './platformAccessory';
-import axios from 'axios';
+import DreoAPI from './DreoAPI';
 
 /**
  * HomebridgePlatform
@@ -52,25 +52,14 @@ export class DreoPlatform implements DynamicPlatformPlugin {
    * Accessories must only be registered once, previously created accessories
    * must not be registered again to prevent "duplicate UUID" errors.
    */
-  discoverDevices() {
-    (async () => {
-      const remote = await axios.get('https://www.dreo-cloud.com/access/endpoint', {
-        params: {
-          'timestamp': Date.now(),
-        },
-        headers: {
-          'country': 'US',
-          'ua': 'dreo/2.0.7 (sdk_gphone64_x86_64;android 13;Scale/2.625)',
-          'lang': 'en',
-          'accept-encoding': 'gzip',
-          'user-agent': 'okhttp/4.9.1',
-        },
-      });
-      this.log.debug('request results:', remote);
-    })();
+  async discoverDevices() {
     // EXAMPLE ONLY
     // A real plugin you would discover accessories from the local network, cloud services
     // or a user-defined array in the platform config.
+
+    const remote = await new DreoAPI().getURL();
+    this.log.debug('\n\nREMOTE:\n', remote);
+
     const exampleDevices = [
       {
         exampleUniqueId: 'ABCD',
