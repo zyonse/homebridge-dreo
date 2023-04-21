@@ -59,6 +59,8 @@ export class DreoPlatform implements DynamicPlatformPlugin {
 
     const auth = await new DreoAPI().authenticate(email, password);
     this.log.debug('\n\nREMOTE:\n', auth);
+    const devices = await new DreoAPI().getDevices(auth.access_token);
+    this.log.debug('\n\nDEVICES:\n', devices);
 
     const exampleDevices = [
       {
