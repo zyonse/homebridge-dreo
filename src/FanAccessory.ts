@@ -41,33 +41,9 @@ export class FanAccessory {
     // each service must implement at-minimum the "required characteristics" for the given service type
     // see https://developers.homebridge.io/#/service/Lightbulb
 
-    // register handlers for the On/Off Characteristic
-    this.service.getCharacteristic(this.platform.Characteristic.Active)
-      .onSet(this.handleActiveSet.bind(this))                // SET - bind to the `setOn` method below
-      .onGet(this.handleActiveGet.bind(this));               // GET - bind to the `getOn` method below
-
     // register handlers for the RotationSpeed Characteristic
     this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
       .onSet(this.setRotationSpeed.bind(this));       // SET - bind to the 'setBrightness` method below
-  }
-
-  /**
-   * Handle requests to set the "Active" characteristic
-   */
-  handleActiveSet(value) {
-    this.platform.log.debug('Triggered SET Active:', value);
-  }
-
-  /**
-   * Handle requests to get the current value of the "Active" characteristic
-   */
-  handleActiveGet() {
-    this.platform.log.debug('Triggered GET Active');
-
-    // set this to a valid value for Active
-    const currentValue = 1;
-
-    return currentValue;
   }
 
   /**
@@ -75,7 +51,7 @@ export class FanAccessory {
    * These are sent when the user changes the state of an accessory, for example, changing the Brightness
    */
   async setRotationSpeed(value: CharacteristicValue) {
-    // implement your own code to set the brightness
+    // implement code to set the speed
     this.exampleStates.Brightness = value as number;
 
     this.platform.log.debug('Set Rotation Speed -> ', value);
