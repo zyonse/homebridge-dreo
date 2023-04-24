@@ -13,8 +13,8 @@ export class FanAccessory {
   // Cached copy of latest fan states
   private fanState = {
     On: false,  //TODO initialize properly
-    Speed: 1,
-    Swing: 0,
+    Speed: 1,  //TODO scale fan speed based on config
+    Swing: false,
   };
 
   constructor(
@@ -46,8 +46,13 @@ export class FanAccessory {
 
     // register handlers for the RotationSpeed Characteristic
     this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
-      .onSet(this.setRotationSpeed.bind(this))       // SET - bind to the 'setBrightness` method below
+      .onSet(this.setRotationSpeed.bind(this))
       .onGet(this.getRotationSpeed.bind(this));
+
+    // register handlers for Swing Mode (oscillation)
+    this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
+      .onSet(this.setSwingMode.bind(this))
+      .onGet(this.getSwingMode.bind(this));
 
     // update values from Dreo app
     ws.addEventListener('message', message => {
@@ -65,7 +70,7 @@ export class FanAccessory {
               break;
             case 'windlevel':
               if (data.method === 'report') {
-                this.fanState.Speed = data.reported.windlevel / 6 * 100;
+                this.fanState.Speed = Math.ceil(data.reported.windlevel / 6 * 100);
               }
               break;
             case 'shakehorizon':
@@ -82,12 +87,15 @@ export class FanAccessory {
   // Handle requests to set the "Active" characteristic
   handleActiveSet(value) {
     this.platform.log.debug('Triggered SET Active:', value);
-    this.ws.send(JSON.stringify({
-      'devicesn': this.accessory.context.device.sn,
-      'method': 'control',
-      'params': {'poweron': Boolean(value)},
-      'timestamp': Date.now(),
-    }));
+    // check state to prevent duplicate requests
+    if (this.fanState.On !== Boolean(value)) {
+      this.ws.send(JSON.stringify({
+        'devicesn': this.accessory.context.device.sn,
+        'method': 'control',
+        'params': {'poweron': Boolean(value)},
+        'timestamp': Date.now(),
+      }));
+    }
   }
 
   // Handle requests to get the current value of the "Active" characteristic
@@ -100,7 +108,7 @@ export class FanAccessory {
    * These are sent when the user changes the state of an accessory, for example, changing the Brightness
    */
   async setRotationSpeed(value) {
-    // implement code to set the speed
+    // rotation speed needs to be scaled to a percentage value (Dreo app uses 1-6)
     const curr = Math.ceil(this.fanState.Speed / 100 * 6);
     const converted = Math.ceil(value / 100 * 6);
     if (curr !== converted) {
@@ -119,4 +127,18 @@ export class FanAccessory {
     return this.fanState.Speed;
   }
 
+  async setSwingMode(value) {
+    if (this.fanState.Swing !== Boolean(value)) {
+      this.ws.send(JSON.stringify({
+        'devicesn': this.accessory.context.device.sn,
+        'method': 'control',
+        'params': {'shakehorizon': Boolean(value)},
+        'timestamp': Date.now(),
+      }));
+    }
+  }
+
+  async getSwingMode() {
+    return this.fanState.Swing;
+  }
 }
