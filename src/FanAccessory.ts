@@ -10,13 +10,10 @@ import { DreoPlatform } from './platform';
 export class FanAccessory {
   private service: Service;
 
-  /**
-   * These are just used to create a working example
-   * You should implement your own code to track the state of your accessory
-   */
-  private exampleStates = {
+  // Fan states
+  private fanState = {
     On: false,
-    Brightness: 100,
+    Speed: 100,
   };
 
   constructor(
@@ -42,12 +39,16 @@ export class FanAccessory {
     // see https://developers.homebridge.io/#/service/Fanv2
     // register handlers for the Active Characteristic
     this.service.getCharacteristic(this.platform.Characteristic.Active)
-      .onSet(this.handleActiveSet.bind(this))                // SET - bind to the `setOn` method below
-      .onGet(this.handleActiveGet.bind(this));               // GET - bind to the `getOn` method below
+      .onSet(this.handleActiveSet.bind(this))
+      .onGet(this.handleActiveGet.bind(this));
 
     // register handlers for the RotationSpeed Characteristic
     this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
       .onSet(this.setRotationSpeed.bind(this));       // SET - bind to the 'setBrightness` method below
+  }
+
+  updateCurrentState(payload) {
+    //this.fanState.On = 
   }
 
   // Handle requests to set the "Active" characteristic
@@ -71,7 +72,7 @@ export class FanAccessory {
    */
   async setRotationSpeed(value: CharacteristicValue) {
     // implement code to set the speed
-    this.exampleStates.Brightness = value as number;
+    this.fanState.Speed = value as number;
 
     this.platform.log.debug('Set Rotation Speed -> ', value);
   }
