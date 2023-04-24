@@ -3,7 +3,6 @@ import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { FanAccessory } from './FanAccessory';
 import DreoAPI from './DreoAPI';
-import { WsReconnect } from 'websocket-reconnect';
 
 /**
  * HomebridgePlatform
@@ -31,28 +30,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
     this.api.on('didFinishLaunching', async () => {
       log.debug('Executed didFinishLaunching callback');
       // run the method to discover / register your devices as accessories
-      const access_token = await this.discoverDevices();
-
-      // open websocket
-      log.debug('wss://wsb-us.dreo-cloud.com/websocket?accessToken='+access_token+'&timestamp='+Date.now());
-      const ws = new WsReconnect({ reconnectDelay: 5000 });
-      ws.open('wss://wsb-us.dreo-cloud.com/websocket?accessToken='+access_token+'&timestamp='+Date.now());
-
-      ws.on('error', error => {
-        log.debug('WebSocket', error);
-      });
-
-      ws.on('open', () => {
-        log.debug('WebSocket Opened');
-      });
-
-      ws.on('message', data => {
-        log.debug('received: %s', data);
-      });
-
-      ws.on('reconnect', () => {
-        log.debug('WebSocket Reconnecting');
-      });
+      this.discoverDevices();
     });
   }
 
@@ -84,6 +62,8 @@ export class DreoPlatform implements DynamicPlatformPlugin {
     const dreoDevices = await new DreoAPI().getDevices(auth.access_token);
     this.log.debug('\n\nDEVICES:\n', dreoDevices);
 
+    const ws = await new DreoAPI().startWebSocket(this, auth.access_token);
+
     // loop over the discovered devices and register each one if it has not already been registered
     for (const device of dreoDevices) {
 
@@ -106,7 +86,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
 
         // create the accessory handler for the restored accessory
         // this is imported from `platformAccessory.ts`
-        new FanAccessory(this, existingAccessory);
+        new FanAccessory(this, existingAccessory, ws);
 
         // it is possible to remove platform accessories at any time using `api.unregisterPlatformAccessories`, eg.:
         // remove platform accessories when no longer present
@@ -125,12 +105,11 @@ export class DreoPlatform implements DynamicPlatformPlugin {
 
         // create the accessory handler for the newly create accessory
         // this is imported from `platformAccessory.ts`
-        new FanAccessory(this, accessory);
+        new FanAccessory(this, accessory, ws);
 
         // link the accessory to your platform
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
       }
     }
-    return auth.access_token;
   }
 }

@@ -1,5 +1,7 @@
 import axios from 'axios';
 import MD5 from 'crypto-js/md5';
+import ReconnectingWebSocket from 'reconnecting-websocket';
+import WebSocket from 'ws';
 
 // Follows same request structure as the mobile app
 export default class DreoAPI {
@@ -46,5 +48,36 @@ export default class DreoAPI {
         'user-agent': 'okhttp/4.9.1',
       },
     })).data.data.list;
+  }
+
+  public async startWebSocket(platform, token) {
+    // open websocket
+    platform.log.debug('wss://wsb-us.dreo-cloud.com/websocket?accessToken='+token+'&timestamp='+Date.now());
+    const ws = new ReconnectingWebSocket(
+      'wss://wsb-us.dreo-cloud.com/websocket?accessToken='+token+'&timestamp='+Date.now(),
+      [],
+      {WebSocket: WebSocket});
+
+    ws.addEventListener('error', error => {
+      platform.log.debug('WebSocket', error);
+    });
+
+    ws.addEventListener('open', () => {
+      platform.log.debug('WebSocket Opened');
+    });
+
+    ws.addEventListener('message', message => {
+      platform.log.debug('received: %s', message);
+      /*const data = JSON.parse(message.data);
+      if (data.method === 'control-report' || data.method === 'control-reply') {
+
+      }*/
+    });
+
+    ws.addEventListener('close', () => {
+      platform.log.debug('WebSocket Closed');
+    });
+
+    return ws;
   }
 }

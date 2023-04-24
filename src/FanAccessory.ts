@@ -19,6 +19,7 @@ export class FanAccessory {
   constructor(
     private readonly platform: DreoPlatform,
     private readonly accessory: PlatformAccessory,
+    private readonly ws,
   ) {
 
     // set accessory information
@@ -56,6 +57,12 @@ export class FanAccessory {
   // Handle requests to set the "Active" characteristic
   handleActiveSet(value) {
     this.platform.log.debug('Triggered SET Active:', value);
+    this.ws.send(JSON.stringify({
+      'devicesn': this.accessory.context.device.sn,
+      'method': 'control',
+      'params': {'poweron': value},
+      'timestamp': Date.now(),
+    }));
   }
 
   // Handle requests to get the current value of the "Active" characteristic
