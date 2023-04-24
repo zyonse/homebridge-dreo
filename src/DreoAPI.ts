@@ -1,6 +1,5 @@
 import axios from 'axios';
 import MD5 from 'crypto-js/md5';
-//import {WebsocketBuilder} from 'websocket-ts';
 
 // Follows same request structure as the mobile app
 export default class DreoAPI {
