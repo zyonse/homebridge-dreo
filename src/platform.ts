@@ -3,7 +3,7 @@ import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { FanAccessory } from './FanAccessory';
 import DreoAPI from './DreoAPI';
-import WebSocket from 'ws';
+import { WsReconnect } from 'websocket-reconnect';
 
 /**
  * HomebridgePlatform
@@ -35,17 +35,23 @@ export class DreoPlatform implements DynamicPlatformPlugin {
 
       // open websocket
       log.debug('wss://wsb-us.dreo-cloud.com/websocket?accessToken='+access_token+'&timestamp='+Date.now());
-      const ws = new WebSocket('wss://wsb-us.dreo-cloud.com/websocket?accessToken='+access_token+'&timestamp='+Date.now());
+      const ws = new WsReconnect({ reconnectDelay: 5000 });
+      ws.open('wss://wsb-us.dreo-cloud.com/websocket?accessToken='+access_token+'&timestamp='+Date.now());
+
       ws.on('error', error => {
-        log.debug('SOCKET ERROR', error);
+        log.debug('WebSocket', error);
       });
 
-      ws.on('open', i => {
-        log.debug('SOCKET OPENED', i);
+      ws.on('open', () => {
+        log.debug('WebSocket Opened');
       });
 
       ws.on('message', data => {
         log.debug('received: %s', data);
+      });
+
+      ws.on('reconnect', () => {
+        log.debug('WebSocket Reconnecting');
       });
     });
   }

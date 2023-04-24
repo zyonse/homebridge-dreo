@@ -47,9 +47,11 @@ export class FanAccessory {
       .onSet(this.setRotationSpeed.bind(this));       // SET - bind to the 'setBrightness` method below
   }
 
+  /*
   updateCurrentState(payload) {
-    //this.fanState.On =
+    this.fanState.On =
   }
+  */
 
   // Handle requests to set the "Active" characteristic
   handleActiveSet(value) {
