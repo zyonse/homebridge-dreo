@@ -51,9 +51,6 @@ export class DreoPlatform implements DynamicPlatformPlugin {
    * must not be registered again to prevent "duplicate UUID" errors.
    */
   async discoverDevices() {
-    // EXAMPLE ONLY
-    // A real plugin you would discover accessories from the local network, cloud services
-    // or a user-defined array in the platform config.
     const email = this.config.options.email;
     const password = this.config.options.password;
 

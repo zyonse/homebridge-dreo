@@ -50,6 +50,10 @@ export default class DreoAPI {
     })).data.data.list;
   }
 
+  public async getState() {
+    // TODO add state initialization
+  }
+
   public async startWebSocket(platform, token) {
     // open websocket
     platform.log.debug('wss://wsb-us.dreo-cloud.com/websocket?accessToken='+token+'&timestamp='+Date.now());
@@ -66,17 +70,12 @@ export default class DreoAPI {
       platform.log.debug('WebSocket Opened');
     });
 
-    ws.addEventListener('message', message => {
-      platform.log.debug('received: %s', message);
-      /*const data = JSON.parse(message.data);
-      if (data.method === 'control-report' || data.method === 'control-reply') {
-
-      }*/
-    });
-
     ws.addEventListener('close', () => {
       platform.log.debug('WebSocket Closed');
     });
+
+    // keep connection open by sending empty packet every 15 seconds
+    setInterval(() => ws.send('2'), 15000);
 
     return ws;
   }
