@@ -1,4 +1,4 @@
-import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
+import { Service, PlatformAccessory} from 'homebridge';
 
 import { DreoPlatform } from './platform';
 
@@ -46,7 +46,8 @@ export class FanAccessory {
 
     // register handlers for the RotationSpeed Characteristic
     this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
-      .onSet(this.setRotationSpeed.bind(this));       // SET - bind to the 'setBrightness` method below
+      .onSet(this.setRotationSpeed.bind(this))       // SET - bind to the 'setBrightness` method below
+      .onGet(this.getRotationSpeed.bind(this));
 
     // update values from Dreo app
     ws.addEventListener('message', message => {
@@ -63,7 +64,9 @@ export class FanAccessory {
               this.fanState.On = data.reported.poweron;
               break;
             case 'windlevel':
-              this.fanState.Speed = data.reported.windlevel;
+              if (data.method === 'report') {
+                this.fanState.Speed = data.reported.windlevel / 6 * 100;
+              }
               break;
             case 'shakehorizon':
               this.fanState.Swing = data.reported.shakehorizon;
@@ -89,23 +92,31 @@ export class FanAccessory {
 
   // Handle requests to get the current value of the "Active" characteristic
   handleActiveGet() {
-    this.platform.log.debug('Triggered GET Active, poweron =', this.fanState.On);
-
-    // set this to a valid value for Active
-    const currentValue = this.fanState.On;
-
-    return currentValue;
+    return this.fanState.On;
   }
 
   /**
    * Handle "SET" requests from HomeKit
    * These are sent when the user changes the state of an accessory, for example, changing the Brightness
    */
-  async setRotationSpeed(value: CharacteristicValue) {
+  async setRotationSpeed(value) {
     // implement code to set the speed
-    this.fanState.Speed = value as number;
+    const curr = Math.ceil(this.fanState.Speed / 100 * 6);
+    const converted = Math.ceil(value / 100 * 6);
+    if (curr !== converted) {
+      this.platform.log.debug('Setting fan speed:', converted);
+      this.ws.send(JSON.stringify({
+        'devicesn': this.accessory.context.device.sn,
+        'method': 'control',
+        'params': {'windlevel': converted},
+        'timestamp': Date.now(),
+      }));
+    }
+    this.fanState.Speed = value;
+  }
 
-    this.platform.log.debug('Set Rotation Speed -> ', value);
+  async getRotationSpeed() {
+    return this.fanState.Speed;
   }
 
 }
