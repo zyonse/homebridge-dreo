@@ -48,7 +48,7 @@ export class FanAccessory {
   }
 
   updateCurrentState(payload) {
-    //this.fanState.On = 
+    //this.fanState.On =
   }
 
   // Handle requests to set the "Active" characteristic

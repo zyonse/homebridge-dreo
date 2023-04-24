@@ -3,6 +3,7 @@ import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { FanAccessory } from './FanAccessory';
 import DreoAPI from './DreoAPI';
+import WebSocket from 'ws';
 
 /**
  * HomebridgePlatform
@@ -27,10 +28,25 @@ export class DreoPlatform implements DynamicPlatformPlugin {
     // Dynamic Platform plugins should only register new accessories after this event was fired,
     // in order to ensure they weren't added to homebridge already. This event can also be used
     // to start discovery of new accessories.
-    this.api.on('didFinishLaunching', () => {
+    this.api.on('didFinishLaunching', async () => {
       log.debug('Executed didFinishLaunching callback');
       // run the method to discover / register your devices as accessories
-      this.discoverDevices();
+      const access_token = await this.discoverDevices();
+
+      // open websocket
+      log.debug('wss://wsb-us.dreo-cloud.com/websocket?accessToken='+access_token+'&timestamp='+Date.now());
+      const ws = new WebSocket('wss://wsb-us.dreo-cloud.com/websocket?accessToken='+access_token+'&timestamp='+Date.now());
+      ws.on('error', error => {
+        log.debug('SOCKET ERROR', error);
+      });
+
+      ws.on('open', i => {
+        log.debug('SOCKET OPENED', i);
+      });
+
+      ws.on('message', data => {
+        log.debug('received: %s', data);
+      });
     });
   }
 
@@ -109,5 +125,6 @@ export class DreoPlatform implements DynamicPlatformPlugin {
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
       }
     }
+    return auth.access_token;
   }
 }
