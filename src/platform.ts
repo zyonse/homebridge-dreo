@@ -54,6 +54,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
     const email = this.config.options.email;
     const password = this.config.options.password;
 
+    // check for config values
     if (email === undefined || password === undefined) {
       this.api.unregisterPlatformAccessories(
         PLUGIN_NAME,
@@ -67,6 +68,12 @@ export class DreoPlatform implements DynamicPlatformPlugin {
     // request access token from Dreo server
     const auth = await new DreoAPI().authenticate(email, password);
     this.log.debug('\n\nREMOTE:\n', auth);
+    // check if access_token is valid
+    if (auth === undefined) {
+      this.log.error('Authentication error: Server returned invalid access_token');
+      this.log.error('Make sure your email/password are correct');
+      return;
+    }
     // use access token to retrieve user's devices
     const dreoDevices = await new DreoAPI().getDevices(auth.access_token);
     this.log.debug('\n\nDEVICES:\n', dreoDevices);
