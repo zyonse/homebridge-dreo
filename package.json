@@ -2,7 +2,7 @@
   "displayName": "Homebridge Dreo",
   "name": "homebridge-dreo",
   "version": "1.1.2",
-  "description": "A short description about what your plugin does.",
+  "description": "Homebridge Plugin for Dreo Smart Devices",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
