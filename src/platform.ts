@@ -54,6 +54,16 @@ export class DreoPlatform implements DynamicPlatformPlugin {
     const email = this.config.options.email;
     const password = this.config.options.password;
 
+    if (email === undefined || password === undefined) {
+      this.api.unregisterPlatformAccessories(
+        PLUGIN_NAME,
+        PLATFORM_NAME,
+        this.accessories,
+      );
+      this.log.error('error: Invalid email and/or password');
+      return;
+    }
+
     // request access token from Dreo server
     const auth = await new DreoAPI().authenticate(email, password);
     this.log.debug('\n\nREMOTE:\n', auth);
