@@ -1,5 +1,4 @@
 import { Service, PlatformAccessory} from 'homebridge';
-
 import { DreoPlatform } from './platform';
 
 /**
@@ -13,13 +12,15 @@ export class FanAccessory {
   // Cached copy of latest fan states
   private fanState = {
     On: false,  //TODO initialize properly
-    Speed: 1,  //TODO scale fan speed based on config
+    Speed: 1,
     Swing: false,
+    MaxSpeed: 1,
   };
 
   constructor(
     private readonly platform: DreoPlatform,
     private readonly accessory: PlatformAccessory,
+    private readonly state,
     private readonly ws,
   ) {
 
@@ -29,7 +30,16 @@ export class FanAccessory {
       .setCharacteristic(this.platform.Characteristic.Model, accessory.context.device.model)
       .setCharacteristic(this.platform.Characteristic.SerialNumber, accessory.context.device.sn);
 
-    // get the LightBulb service if it exists, otherwise create a new LightBulb service
+    // initialize fan values
+    // get max fan speed from config
+    this.fanState.MaxSpeed = accessory.context.device.controlsConf.control[1].items[1].text;
+    platform.log.debug(state);
+    // load current state from Dreo servers
+    this.fanState.On = state.poweron.state;
+    this.fanState.Speed = Math.ceil(state.windlevel.state / this.fanState.MaxSpeed * 100);
+    this.fanState.Swing = state.shakehorizon.state;
+
+    // get the Fanv2 service if it exists, otherwise create a new Fanv2 service
     // you can create multiple services for each accessory
     this.service = this.accessory.getService(this.platform.Service.Fanv2) || this.accessory.addService(this.platform.Service.Fanv2);
 
@@ -70,7 +80,7 @@ export class FanAccessory {
               break;
             case 'windlevel':
               if (data.method === 'report') {
-                this.fanState.Speed = Math.ceil(data.reported.windlevel / 6 * 100);
+                this.fanState.Speed = Math.ceil(data.reported.windlevel / this.fanState.MaxSpeed * 100);
               }
               break;
             case 'shakehorizon':
@@ -108,9 +118,9 @@ export class FanAccessory {
    * These are sent when the user changes the state of an accessory, for example, changing the Brightness
    */
   async setRotationSpeed(value) {
-    // rotation speed needs to be scaled to a percentage value (Dreo app uses 1-6)
-    const curr = Math.ceil(this.fanState.Speed / 100 * 6);
-    const converted = Math.ceil(value / 100 * 6);
+    // rotation speed needs to be scaled to a percentage value (Dreo app uses numbers, ex. 1-6)
+    const curr = Math.ceil(this.fanState.Speed / 100 * this.fanState.MaxSpeed);
+    const converted = Math.ceil(value / 100 * this.fanState.MaxSpeed);
     if (curr !== converted) {
       this.platform.log.debug('Setting fan speed:', converted);
       this.ws.send(JSON.stringify({

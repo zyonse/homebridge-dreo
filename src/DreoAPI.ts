@@ -50,8 +50,21 @@ export default class DreoAPI {
     })).data.data.list;
   }
 
-  public async getState() {
-    // TODO add state initialization
+  public async getState(sn, token) {
+    return (await axios.get('https://app-api-us.dreo-cloud.com/api/user-device/device/state', {
+      params: {
+        'deviceSn': sn,
+        'timestamp': Date.now(),
+      },
+      headers: {
+        'authorization': 'Bearer ' + token,
+        'country': 'US',
+        'ua': 'dreo/2.0.7 (sdk_gphone64_x86_64;android 13;Scale/2.625)',
+        'lang': 'en',
+        'accept-encoding': 'gzip',
+        'user-agent': 'okhttp/4.9.1',
+      },
+    })).data.data.mixed;
   }
 
   public async startWebSocket(platform, token) {

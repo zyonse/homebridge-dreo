@@ -73,6 +73,9 @@ export class DreoPlatform implements DynamicPlatformPlugin {
       // the cached devices we stored in the `configureAccessory` method above
       const existingAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
 
+      // get initial device state
+      const state = await new DreoAPI().getState(device.sn, auth.access_token);
+
       if (existingAccessory) {
         // the accessory already exists
         this.log.info('Restoring existing accessory from cache:', device.deviceName);
@@ -83,7 +86,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
 
         // create the accessory handler for the restored accessory
         // this is imported from `platformAccessory.ts`
-        new FanAccessory(this, existingAccessory, ws);
+        new FanAccessory(this, existingAccessory, state, ws);
 
         // it is possible to remove platform accessories at any time using `api.unregisterPlatformAccessories`, eg.:
         // remove platform accessories when no longer present
@@ -102,7 +105,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
 
         // create the accessory handler for the newly create accessory
         // this is imported from `platformAccessory.ts`
-        new FanAccessory(this, accessory, ws);
+        new FanAccessory(this, accessory, state, ws);
 
         // link the accessory to your platform
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
