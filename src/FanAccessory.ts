@@ -99,6 +99,7 @@ export class FanAccessory {
     this.platform.log.debug('Triggered SET Active:', value);
     // check state to prevent duplicate requests
     if (this.fanState.On !== Boolean(value)) {
+      // send to Dreo server via websocket
       this.ws.send(JSON.stringify({
         'devicesn': this.accessory.context.device.sn,
         'method': 'control',
@@ -113,23 +114,21 @@ export class FanAccessory {
     return this.fanState.On;
   }
 
-  /**
-   * Handle "SET" requests from HomeKit
-   * These are sent when the user changes the state of an accessory, for example, changing the Brightness
-   */
+  // Handle requests to set the fan speed
   async setRotationSpeed(value) {
-    // rotation speed needs to be scaled to a percentage value (Dreo app uses numbers, ex. 1-6)
+    // rotation speed needs to be scaled from HomeKit's percentage value (Dreo app uses whole numbers, ex. 1-6)
     const curr = Math.ceil(this.fanState.Speed * this.fanState.MaxSpeed / 100);
     const converted = Math.ceil(value * this.fanState.MaxSpeed / 100);
+    // only send if new value is different from original value
     if (curr !== converted) {
       // avoid setting speed to 0 (illegal value)
       if (converted !== 0) {
         this.platform.log.debug('Setting fan speed:', converted);
-        // setting poweron to true prevents fan speed from being overriden
         this.ws.send(JSON.stringify({
           'devicesn': this.accessory.context.device.sn,
           'method': 'control',
           'params': {
+            // setting poweron to true prevents fan speed from being overriden
             'poweron': true,
             'windlevel': converted,
           },
@@ -137,6 +136,7 @@ export class FanAccessory {
         }));
       }
     }
+    // save new speed to cache (we only do this for the speed characteristic because it isn't always reported to the server)
     this.fanState.Speed = value;
   }
 
@@ -144,6 +144,7 @@ export class FanAccessory {
     return this.fanState.Speed;
   }
 
+  // turn oscillation on/off
   async setSwingMode(value) {
     this.ws.send(JSON.stringify({
       'devicesn': this.accessory.context.device.sn,

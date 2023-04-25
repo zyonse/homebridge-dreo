@@ -54,11 +54,14 @@ export class DreoPlatform implements DynamicPlatformPlugin {
     const email = this.config.options.email;
     const password = this.config.options.password;
 
+    // request access token from Dreo server
     const auth = await new DreoAPI().authenticate(email, password);
     this.log.debug('\n\nREMOTE:\n', auth);
+    // use access token to retrieve user's devices
     const dreoDevices = await new DreoAPI().getDevices(auth.access_token);
     this.log.debug('\n\nDEVICES:\n', dreoDevices);
 
+    // open WebSocket (used to control devices later)
     const ws = await new DreoAPI().startWebSocket(this, auth.access_token);
 
     // loop over the discovered devices and register each one if it has not already been registered
