@@ -36,7 +36,7 @@ export class FanAccessory {
     platform.log.debug(state);
     // load current state from Dreo servers
     this.fanState.On = state.poweron.state;
-    this.fanState.Speed = Math.ceil(state.windlevel.state / this.fanState.MaxSpeed * 100);
+    this.fanState.Speed = Math.ceil(state.windlevel.state * 100 / this.fanState.MaxSpeed);
     this.fanState.Swing = state.shakehorizon.state;
 
     // get the Fanv2 service if it exists, otherwise create a new Fanv2 service
@@ -80,7 +80,7 @@ export class FanAccessory {
               break;
             case 'windlevel':
               if (data.method === 'report') {
-                this.fanState.Speed = Math.ceil(data.reported.windlevel / this.fanState.MaxSpeed * 100);
+                this.fanState.Speed = Math.ceil(data.reported.windlevel * 100 / this.fanState.MaxSpeed);
               }
               break;
             case 'shakehorizon':
@@ -119,16 +119,23 @@ export class FanAccessory {
    */
   async setRotationSpeed(value) {
     // rotation speed needs to be scaled to a percentage value (Dreo app uses numbers, ex. 1-6)
-    const curr = Math.ceil(this.fanState.Speed / 100 * this.fanState.MaxSpeed);
-    const converted = Math.ceil(value / 100 * this.fanState.MaxSpeed);
+    const curr = Math.ceil(this.fanState.Speed * this.fanState.MaxSpeed / 100);
+    const converted = Math.ceil(value * this.fanState.MaxSpeed / 100);
     if (curr !== converted) {
-      this.platform.log.debug('Setting fan speed:', converted);
-      this.ws.send(JSON.stringify({
-        'devicesn': this.accessory.context.device.sn,
-        'method': 'control',
-        'params': {'windlevel': converted},
-        'timestamp': Date.now(),
-      }));
+      // avoid setting speed to 0 (illegal value)
+      if (converted !== 0) {
+        this.platform.log.debug('Setting fan speed:', converted);
+        // setting poweron to true prevents fan speed from being overriden
+        this.ws.send(JSON.stringify({
+          'devicesn': this.accessory.context.device.sn,
+          'method': 'control',
+          'params': {
+            'poweron': true,
+            'windlevel': converted,
+          },
+          'timestamp': Date.now(),
+        }));
+      }
     }
     this.fanState.Speed = value;
   }
@@ -138,14 +145,12 @@ export class FanAccessory {
   }
 
   async setSwingMode(value) {
-    if (this.fanState.Swing !== Boolean(value)) {
-      this.ws.send(JSON.stringify({
-        'devicesn': this.accessory.context.device.sn,
-        'method': 'control',
-        'params': {'shakehorizon': Boolean(value)},
-        'timestamp': Date.now(),
-      }));
-    }
+    this.ws.send(JSON.stringify({
+      'devicesn': this.accessory.context.device.sn,
+      'method': 'control',
+      'params': {'shakehorizon': Boolean(value)},
+      'timestamp': Date.now(),
+    }));
   }
 
   async getSwingMode() {

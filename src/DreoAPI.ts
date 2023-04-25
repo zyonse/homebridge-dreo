@@ -50,6 +50,7 @@ export default class DreoAPI {
     })).data.data.list;
   }
 
+  // used to initialize power state, speed values on boot
   public async getState(sn, token) {
     return (await axios.get('https://app-api-us.dreo-cloud.com/api/user-device/device/state', {
       params: {
@@ -67,6 +68,7 @@ export default class DreoAPI {
     })).data.data.mixed;
   }
 
+  // open websocket for fan commands, websocket will auto-reconnect if a connection error occurs
   public async startWebSocket(platform, token) {
     // open websocket
     platform.log.debug('wss://wsb-us.dreo-cloud.com/websocket?accessToken='+token+'&timestamp='+Date.now());
