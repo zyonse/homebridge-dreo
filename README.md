@@ -7,6 +7,9 @@
 
 
 # Homebridge Dreo Plugin
+[![verified-by-homebridge](https://badgen.net/badge/homebridge/verified/purple)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins)
+[![npm](https://img.shields.io/npm/dt/homebridge-dreo)](https://www.npmjs.com/package/homebridge-dreo)
+
 
 This is a Homebridge plugin that allows you to control Dreo smart devices.
 
