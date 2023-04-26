@@ -15,6 +15,7 @@ This is a Homebridge plugin that allows you to control Dreo smart devices.
 #### Tower Fans
 * DR-HTF001S
 * DR-HTF002S
+* DR-HTF007S
 
 Please let me know if you have another model that works or doesn't work. The plugin *should* also be compatible with multiple devices on the same account but I haven't tested this. Non-fan smart devices are not supported at this time, but if you have another device and can help me test some code out I would definitely be open to adding support.
 
