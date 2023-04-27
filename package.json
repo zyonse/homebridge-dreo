@@ -11,6 +11,10 @@
   "bugs": {
     "url": "https://github.com/zyonse/homebridge-dreo/issues"
   },
+  "funding": {
+    "type": "paypal",
+    "url": "https://paypal.me/zyonse"
+  },
   "engines": {
     "node": ">=14.18.1",
     "homebridge": ">=1.3.5"
