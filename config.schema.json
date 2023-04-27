@@ -8,6 +8,9 @@
       "name": {
         "title": "Name",
         "type": "string",
+        "condition": {
+          "functionBody": "return 0"
+        },
         "required": true,
         "default": "Dreo Platform",
         "description": "You shouldn't need to change this."
