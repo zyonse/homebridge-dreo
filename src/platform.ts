@@ -74,6 +74,9 @@ export class DreoPlatform implements DynamicPlatformPlugin {
       this.log.error('Make sure your email/password are correct');
       return;
     }
+    this.log.info('Country:', auth.countryCode);
+    this.log.info('Region:', auth.region);
+
     // use access token to retrieve user's devices
     const dreoDevices = await new DreoAPI().getDevices(auth.access_token);
     this.log.debug('\n\nDEVICES:\n', dreoDevices);
