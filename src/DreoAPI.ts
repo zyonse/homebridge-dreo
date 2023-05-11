@@ -6,8 +6,9 @@ import WebSocket from 'ws';
 // Follows same request structure as the mobile app
 export default class DreoAPI {
   // Get authentication token
-  public async authenticate(email, password) {
-    return (await axios.post('https://app-api-us.dreo-cloud.com/api/oauth/login', {
+  public async authenticate(platform, email, password) {
+    let token;
+    await axios.post('https://app-api-us.dreo-cloud.com/api/oauth/login', {
       'client_id': '7de37c362ee54dcf9c4561812309347a',
       'client_secret': '32dfa0764f25451d99f94e1693498791',
       'email': email,
@@ -28,7 +29,15 @@ export default class DreoAPI {
         'accept-encoding': 'gzip',
         'user-agent': 'okhttp/4.9.1',
       },
-    })).data.data;
+    })
+      .then((response) => {
+        token = response.data.data;
+      })
+      .catch((error) => {
+        platform.log.error('error retrieving token:', error.response.data);
+        token = undefined;
+      });
+    return token;
   }
 
   // Return device list
@@ -61,8 +70,9 @@ export default class DreoAPI {
   }
 
   // used to initialize power state, speed values on boot
-  public async getState(sn, token) {
-    return (await axios.get('https://app-api-us.dreo-cloud.com/api/user-device/device/state', {
+  public async getState(platform, sn, token) {
+    let state;
+    await axios.get('https://app-api-us.dreo-cloud.com/api/user-device/device/state', {
       params: {
         'deviceSn': sn,
         'timestamp': Date.now(),
@@ -75,7 +85,15 @@ export default class DreoAPI {
         'accept-encoding': 'gzip',
         'user-agent': 'okhttp/4.9.1',
       },
-    })).data.data.mixed;
+    })
+      .then((response) => {
+        state = response.data.data.mixed;
+      })
+      .catch((error) => {
+        platform.log.error('error retrieving device state:', error.response.data);
+        state = undefined;
+      });
+    return state;
   }
 
   // open websocket for fan commands, websocket will auto-reconnect if a connection error occurs
