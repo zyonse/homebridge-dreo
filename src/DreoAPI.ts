@@ -32,8 +32,9 @@ export default class DreoAPI {
   }
 
   // Return device list
-  public async getDevices(token) {
-    return (await axios.get('https://app-api-us.dreo-cloud.com/api/v2/user-device/device/list', {
+  public async getDevices(platform, token) {
+    let devices;
+    await axios.get('https://app-api-us.dreo-cloud.com/api/v2/user-device/device/list', {
       params: {
         'pageSize': 1000,
         'currentPage': 1,
@@ -47,7 +48,16 @@ export default class DreoAPI {
         'accept-encoding': 'gzip',
         'user-agent': 'okhttp/4.9.1',
       },
-    })).data.data.list;
+    })
+      // Catch and log errors
+      .then((response) => {
+        devices = response.data.data.list;
+      })
+      .catch((error) => {
+        platform.log.error('error retrieving device list:', error.response.data);
+        devices = undefined;
+      });
+    return devices;
   }
 
   // used to initialize power state, speed values on boot

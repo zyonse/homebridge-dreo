@@ -78,8 +78,12 @@ export class DreoPlatform implements DynamicPlatformPlugin {
     this.log.info('Region:', auth.region);
 
     // use access token to retrieve user's devices
-    const dreoDevices = await new DreoAPI().getDevices(auth.access_token);
+    const dreoDevices = await new DreoAPI().getDevices(this, auth.access_token);
     this.log.debug('\n\nDEVICES:\n', dreoDevices);
+    // check for device list
+    if (dreoDevices === undefined) {
+      return;
+    }
 
     // open WebSocket (used to control devices later)
     const ws = await new DreoAPI().startWebSocket(this, auth.access_token);
