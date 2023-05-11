@@ -78,7 +78,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
     this.log.info('Region:', auth.region);
 
     // use access token to retrieve user's devices
-    const dreoDevices = await new DreoAPI().getDevices(this, auth.access_token);
+    const dreoDevices = await new DreoAPI().getDevices(this, auth);
     this.log.debug('\n\nDEVICES:\n', dreoDevices);
     // check for device list
     if (dreoDevices === undefined) {
@@ -86,7 +86,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
     }
 
     // open WebSocket (used to control devices later)
-    const ws = await new DreoAPI().startWebSocket(this, auth.access_token);
+    const ws = await new DreoAPI().startWebSocket(this, auth);
 
     // loop over the discovered devices and register each one if it has not already been registered
     for (const device of dreoDevices) {
@@ -101,7 +101,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
       const existingAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
 
       // get initial device state
-      const state = await new DreoAPI().getState(this, device.sn, auth.access_token);
+      const state = await new DreoAPI().getState(this, device.sn, auth);
       if (state === undefined) {
         this.log.error('error, could not retrieve device state');
         return;

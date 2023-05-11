@@ -22,7 +22,6 @@ export default class DreoAPI {
         'timestamp': Date.now(),
       },
       headers: {
-        'country': 'US',
         'ua': 'dreo/2.0.7 (sdk_gphone64_x86_64;android 13;Scale/2.625)',
         'lang': 'en',
         'content-type': 'application/json; charset=UTF-8',
@@ -41,17 +40,16 @@ export default class DreoAPI {
   }
 
   // Return device list
-  public async getDevices(platform, token) {
+  public async getDevices(platform, auth) {
     let devices;
-    await axios.get('https://app-api-us.dreo-cloud.com/api/v2/user-device/device/list', {
+    await axios.get('https://app-api-'+auth.countryCode+'.dreo-cloud.com/api/v2/user-device/device/list', {
       params: {
         'pageSize': 1000,
         'currentPage': 1,
         'timestamp': Date.now(),
       },
       headers: {
-        'authorization': 'Bearer ' + token,
-        'country': 'US',
+        'authorization': 'Bearer ' + auth.access_token,
         'ua': 'dreo/2.0.7 (sdk_gphone64_x86_64;android 13;Scale/2.625)',
         'lang': 'en',
         'accept-encoding': 'gzip',
@@ -63,23 +61,22 @@ export default class DreoAPI {
         devices = response.data.data.list;
       })
       .catch((error) => {
-        platform.log.error('error retrieving device list:', error.response.data);
+        platform.log.error('error retrieving device list:', error.response);
         devices = undefined;
       });
     return devices;
   }
 
   // used to initialize power state, speed values on boot
-  public async getState(platform, sn, token) {
+  public async getState(platform, sn, auth) {
     let state;
-    await axios.get('https://app-api-us.dreo-cloud.com/api/user-device/device/state', {
+    await axios.get('https://app-api-'+auth.countryCode+'.dreo-cloud.com/api/user-device/device/state', {
       params: {
         'deviceSn': sn,
         'timestamp': Date.now(),
       },
       headers: {
-        'authorization': 'Bearer ' + token,
-        'country': 'US',
+        'authorization': 'Bearer ' + auth.access_token,
         'ua': 'dreo/2.0.7 (sdk_gphone64_x86_64;android 13;Scale/2.625)',
         'lang': 'en',
         'accept-encoding': 'gzip',
@@ -97,11 +94,12 @@ export default class DreoAPI {
   }
 
   // open websocket for fan commands, websocket will auto-reconnect if a connection error occurs
-  public async startWebSocket(platform, token) {
+  public async startWebSocket(platform, auth) {
     // open websocket
-    platform.log.debug('wss://wsb-us.dreo-cloud.com/websocket?accessToken='+token+'&timestamp='+Date.now());
+    const url = 'wss://wsb-'+auth.countryCode+'.dreo-cloud.com/websocket?accessToken='+auth.access_token+'&timestamp='+Date.now();
+    platform.log.debug(url);
     const ws = new ReconnectingWebSocket(
-      'wss://wsb-us.dreo-cloud.com/websocket?accessToken='+token+'&timestamp='+Date.now(),
+      url,
       [],
       {WebSocket: WebSocket});
 
