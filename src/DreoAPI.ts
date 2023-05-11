@@ -33,7 +33,7 @@ export default class DreoAPI {
         token = response.data.data;
       })
       .catch((error) => {
-        platform.log.error('error retrieving token:', error.response.data);
+        platform.log.error('error retrieving token:', error);
         token = undefined;
       });
     return token;
@@ -61,7 +61,7 @@ export default class DreoAPI {
         devices = response.data.data.list;
       })
       .catch((error) => {
-        platform.log.error('error retrieving device list:', error.response);
+        platform.log.error('error retrieving device list:', error);
         devices = undefined;
       });
     return devices;
@@ -87,7 +87,7 @@ export default class DreoAPI {
         state = response.data.data.mixed;
       })
       .catch((error) => {
-        platform.log.error('error retrieving device state:', error.response.data);
+        platform.log.error('error retrieving device state:', error);
         state = undefined;
       });
     return state;
