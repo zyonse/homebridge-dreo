@@ -66,7 +66,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
     }
 
     // request access token from Dreo server
-    const auth = await new DreoAPI().authenticate(this, email, password);
+    let auth = await new DreoAPI().authenticate(this, email, password, 'us');
     this.log.debug('\n\nREMOTE:\n', auth);
     // check if access_token is valid
     if (auth === undefined) {
@@ -76,6 +76,17 @@ export class DreoPlatform implements DynamicPlatformPlugin {
     }
     this.log.info('Country:', auth.countryCode);
     this.log.info('Region:', auth.region);
+
+    if (auth.region === 'NA') {
+      auth.server = 'us';
+    } else if (auth.region === 'EU') {
+      auth = await new DreoAPI().authenticate(this, email, password, 'eu');
+      auth.server = 'eu';
+    } else {
+      this.log.error('error, unknown region');
+      this.log.error('Please open a github issue and provide your Country and Region (shown above)');
+      return;
+    }
 
     // use access token to retrieve user's devices
     const dreoDevices = await new DreoAPI().getDevices(this, auth);

@@ -6,9 +6,9 @@ import WebSocket from 'ws';
 // Follows same request structure as the mobile app
 export default class DreoAPI {
   // Get authentication token
-  public async authenticate(platform, email, password) {
+  public async authenticate(platform, email, password, server) {
     let token;
-    await axios.post('https://app-api-us.dreo-cloud.com/api/oauth/login', {
+    await axios.post('https://app-api-'+server+'.dreo-cloud.com/api/oauth/login', {
       'client_id': '7de37c362ee54dcf9c4561812309347a',
       'client_secret': '32dfa0764f25451d99f94e1693498791',
       'email': email,
@@ -42,7 +42,7 @@ export default class DreoAPI {
   // Return device list
   public async getDevices(platform, auth) {
     let devices;
-    await axios.get('https://app-api-'+auth.countryCode+'.dreo-cloud.com/api/v2/user-device/device/list', {
+    await axios.get('https://app-api-'+auth.server+'.dreo-cloud.com/api/v2/user-device/device/list', {
       params: {
         'pageSize': 1000,
         'currentPage': 1,
@@ -70,7 +70,7 @@ export default class DreoAPI {
   // used to initialize power state, speed values on boot
   public async getState(platform, sn, auth) {
     let state;
-    await axios.get('https://app-api-'+auth.countryCode+'.dreo-cloud.com/api/user-device/device/state', {
+    await axios.get('https://app-api-'+auth.server+'.dreo-cloud.com/api/user-device/device/state', {
       params: {
         'deviceSn': sn,
         'timestamp': Date.now(),
@@ -96,7 +96,7 @@ export default class DreoAPI {
   // open websocket for fan commands, websocket will auto-reconnect if a connection error occurs
   public async startWebSocket(platform, auth) {
     // open websocket
-    const url = 'wss://wsb-'+auth.countryCode+'.dreo-cloud.com/websocket?accessToken='+auth.access_token+'&timestamp='+Date.now();
+    const url = 'wss://wsb-'+auth.server+'.dreo-cloud.com/websocket?accessToken='+auth.access_token+'&timestamp='+Date.now();
     platform.log.debug(url);
     const ws = new ReconnectingWebSocket(
       url,
