@@ -1,7 +1,7 @@
 
 <p align="center">
 
-<img src="https://play-lh.googleusercontent.com/8qg4gA2ZhxBNPPSlp3zT4Z54Meh-emx-JXs8M0H78_4ExRA1qE0aNpO00bI_2lbWo5g=w480-h960-rw" width="150">
+<img src="https://play-lh.googleusercontent.com/8qg4gA2ZhxBNPPSlp3zT4Z54Meh-emx-JXs8M0H78_4ExRA1qE0aNpO00bI_2lbWo5g=w480-h960-rw" width=150>
 
 </p>
 
@@ -10,8 +10,10 @@
 [![verified-by-homebridge](https://badgen.net/badge/homebridge/verified/purple)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins)
 [![npm](https://img.shields.io/npm/dt/homebridge-dreo)](https://www.npmjs.com/package/homebridge-dreo)
 
-
-This is a Homebridge plugin that allows you to control Dreo smart devices.
+Homebridge plugin for Dreo brand smart devices.
+<p align="center">
+<img src="https://github.com/zyonse/homebridge-dreo/assets/28782587/557325f4-8872-40a7-b4a8-7a4ce5f55430" width=200>
+</p>
 
 ## Compatability
 ### Confirmed Working
@@ -23,7 +25,6 @@ This is a Homebridge plugin that allows you to control Dreo smart devices.
 * DR-HAF004S
 
 Please let me know if you have another model that works or doesn't work. The plugin *should* also be compatible with multiple devices on the same account but I haven't tested this. Non-fan smart devices are not supported at this time, but if you have another device and can help me test some code out I would definitely be open to adding support.
-
 ## Installation
 ```
 npm i homebridge-dreo
