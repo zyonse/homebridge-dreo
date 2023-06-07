@@ -11,7 +11,7 @@ export class FanAccessory {
 
   // Cached copy of latest fan states
   private fanState = {
-    On: false,  //TODO initialize properly
+    On: false,
     Speed: 1,
     Swing: false,
     MaxSpeed: 1,
