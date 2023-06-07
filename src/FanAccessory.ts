@@ -11,7 +11,7 @@ export class FanAccessory {
 
   // Cached copy of latest fan states
   private fanState = {
-    On: false,  //TODO initialize properly
+    On: false,
     Speed: 1,
     Swing: false,
     MaxSpeed: 1,
@@ -33,11 +33,10 @@ export class FanAccessory {
     // initialize fan values
     // get max fan speed from config
     this.fanState.MaxSpeed = accessory.context.device.controlsConf.control[1].items[1].text;
-    platform.log.debug(state);
+    platform.log.debug('State:', state);
     // load current state from Dreo servers
     this.fanState.On = state.poweron.state;
     this.fanState.Speed = Math.ceil(state.windlevel.state * 100 / this.fanState.MaxSpeed);
-    this.fanState.Swing = state.shakehorizon.state;
 
     // get the Fanv2 service if it exists, otherwise create a new Fanv2 service
     // you can create multiple services for each accessory
@@ -59,10 +58,14 @@ export class FanAccessory {
       .onSet(this.setRotationSpeed.bind(this))
       .onGet(this.getRotationSpeed.bind(this));
 
-    // register handlers for Swing Mode (oscillation)
-    this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
-      .onSet(this.setSwingMode.bind(this))
-      .onGet(this.getSwingMode.bind(this));
+    // check whether fan supports oscillation
+    if (state.shakehorizon !== undefined) {
+      // register handlers for Swing Mode (oscillation)
+      this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
+        .onSet(this.setSwingMode.bind(this))
+        .onGet(this.getSwingMode.bind(this));
+      this.fanState.Swing = state.shakehorizon.state;
+    }
 
     // update values from Dreo app
     ws.addEventListener('message', message => {
