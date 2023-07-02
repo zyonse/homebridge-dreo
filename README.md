@@ -20,7 +20,7 @@ Homebridge plugin for Dreo brand smart devices.
 #### Tower Fans
 * DR-HTF001S
 * DR-HTF002S
-* DR-HTF005S
+* DR-HTF004S
 * DR-HTF005S
 * DR-HTF007S
 #### Table Fans
