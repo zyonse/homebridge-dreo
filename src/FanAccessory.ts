@@ -36,7 +36,7 @@ export class FanAccessory {
     platform.log.debug('State:', state);
     // load current state from Dreo servers
     this.fanState.On = state.poweron.state;
-    this.fanState.Speed = Math.ceil(state.windlevel.state * 100 / this.fanState.MaxSpeed);
+    this.fanState.Speed = state.windlevel.state * 100 / this.fanState.MaxSpeed;
 
     // get the Fanv2 service if it exists, otherwise create a new Fanv2 service
     // you can create multiple services for each accessory
@@ -55,6 +55,10 @@ export class FanAccessory {
 
     // register handlers for the RotationSpeed Characteristic
     this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
+      .setProps({
+        // setting minStep defines fan speed steps in HomeKit
+        minStep: 100 / this.fanState.MaxSpeed,
+      })
       .onSet(this.setRotationSpeed.bind(this))
       .onGet(this.getRotationSpeed.bind(this));
 
@@ -80,14 +84,15 @@ export class FanAccessory {
           switch(Object.keys(data.reported)[0]) {
             case 'poweron':
               this.fanState.On = data.reported.poweron;
+              this.platform.log.debug('Fan power:', data.reported.poweron);
               break;
             case 'windlevel':
-              if (data.method === 'report') {
-                this.fanState.Speed = Math.ceil(data.reported.windlevel * 100 / this.fanState.MaxSpeed);
-              }
+              this.fanState.Speed = data.reported.windlevel * 100 / this.fanState.MaxSpeed;
+              this.platform.log.debug('Fan speed:', data.reported.windlevel);
               break;
             case 'shakehorizon':
               this.fanState.Swing = data.reported.shakehorizon;
+              this.platform.log.debug('Oscillation mode:', data.reported.shakehorizon);
               break;
             default:
               platform.log.debug('Unknown command received:', Object.keys(data.reported)[0]);
@@ -120,27 +125,21 @@ export class FanAccessory {
   // Handle requests to set the fan speed
   async setRotationSpeed(value) {
     // rotation speed needs to be scaled from HomeKit's percentage value (Dreo app uses whole numbers, ex. 1-6)
-    const curr = Math.ceil(this.fanState.Speed * this.fanState.MaxSpeed / 100);
-    const converted = Math.ceil(value * this.fanState.MaxSpeed / 100);
-    // only send if new value is different from original value
-    if (curr !== converted) {
-      // avoid setting speed to 0 (illegal value)
-      if (converted !== 0) {
-        this.platform.log.debug('Setting fan speed:', converted);
-        this.ws.send(JSON.stringify({
-          'devicesn': this.accessory.context.device.sn,
-          'method': 'control',
-          'params': {
-            // setting poweron to true prevents fan speed from being overriden
-            'poweron': true,
-            'windlevel': converted,
-          },
-          'timestamp': Date.now(),
-        }));
-      }
+    const converted = Math.round(value * this.fanState.MaxSpeed / 100);
+    // avoid setting speed to 0 (illegal value)
+    if (converted !== 0) {
+      this.platform.log.debug('Setting fan speed:', converted);
+      this.ws.send(JSON.stringify({
+        'devicesn': this.accessory.context.device.sn,
+        'method': 'control',
+        'params': {
+          // setting poweron to true prevents fan speed from being overriden
+          'poweron': true,
+          'windlevel': converted,
+        },
+        'timestamp': Date.now(),
+      }));
     }
-    // save new speed to cache (we only do this for the speed characteristic because it isn't always reported to the server)
-    this.fanState.Speed = value;
   }
 
   async getRotationSpeed() {
