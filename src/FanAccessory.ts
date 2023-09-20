@@ -14,6 +14,7 @@ export class FanAccessory {
     On: false,
     Speed: 1,
     Swing: false,
+    SwingMethod: 'shakehorizon',  // some fans use hoscon instead of shakehorizon to control swing mode
     MaxSpeed: 1,
   };
 
@@ -63,7 +64,11 @@ export class FanAccessory {
       .onGet(this.getRotationSpeed.bind(this));
 
     // check whether fan supports oscillation
-    if (state.shakehorizon !== undefined) {
+    if (state.shakehorizon !== undefined || state.hoscon !== undefined) {
+      // some fans use different commands to toggle oscillation, determine which one should be used
+      if (state.hoscon !== undefined) {
+        this.fanState.SwingMethod = 'hoscon';
+      }
       // register handlers for Swing Mode (oscillation)
       this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
         .onSet(this.setSwingMode.bind(this))
@@ -93,6 +98,10 @@ export class FanAccessory {
             case 'shakehorizon':
               this.fanState.Swing = data.reported.shakehorizon;
               this.platform.log.debug('Oscillation mode:', data.reported.shakehorizon);
+              break;
+            case 'hoscon':
+              this.fanState.Swing = data.reported.hoscon;
+              this.platform.log.debug('Oscillation mode:', data.reported.hoscon);
               break;
             default:
               platform.log.debug('Unknown command received:', Object.keys(data.reported)[0]);
@@ -151,7 +160,7 @@ export class FanAccessory {
     this.ws.send(JSON.stringify({
       'devicesn': this.accessory.context.device.sn,
       'method': 'control',
-      'params': {'shakehorizon': Boolean(value)},
+      'params': {[this.fanState.SwingMethod]: Boolean(value)},
       'timestamp': Date.now(),
     }));
   }
