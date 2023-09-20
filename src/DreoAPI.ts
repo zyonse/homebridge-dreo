@@ -93,7 +93,8 @@ export default class DreoAPI {
     return state;
   }
 
-  // open websocket for fan commands, websocket will auto-reconnect if a connection error occurs
+  // open websocket for outgoing fan commands, websocket will auto-reconnect if a connection error occurs
+  // websocket is also used to monitor incoming state changes from hardware controls
   public async startWebSocket(platform, auth) {
     // open websocket
     const url = 'wss://wsb-'+auth.server+'.dreo-cloud.com/websocket?accessToken='+auth.access_token+'&timestamp='+Date.now();
