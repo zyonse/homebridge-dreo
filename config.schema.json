@@ -31,6 +31,18 @@
             "required": true
           }
         }
+      },
+      "hideTemperatureSensor": {
+        "title": "Hide Temperature Sensor",
+        "type": "boolean",
+        "default": false,
+        "description": "Enable this option to hide the temperature sensor."
+      },
+      "temperatureOffset": {
+        "title": "Temperature Offset",
+        "type": "number",
+        "default": 0,
+        "description": "Subtract (or add) a set amount from the temperature reading. (Use negative numbers to subtract.)"
       }
     }
   }
