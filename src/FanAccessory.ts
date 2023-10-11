@@ -89,18 +89,22 @@ export class FanAccessory {
           switch(Object.keys(data.reported)[0]) {
             case 'poweron':
               this.fanState.On = data.reported.poweron;
+              this.service.getCharacteristic(this.platform.Characteristic.Active).updateValue(this.fanState.On);
               this.platform.log.debug('Fan power:', data.reported.poweron);
               break;
             case 'windlevel':
               this.fanState.Speed = data.reported.windlevel * 100 / this.fanState.MaxSpeed;
+              this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed).updateValue(this.fanState.Speed);
               this.platform.log.debug('Fan speed:', data.reported.windlevel);
               break;
             case 'shakehorizon':
               this.fanState.Swing = data.reported.shakehorizon;
+              this.service.getCharacteristic(this.platform.Characteristic.SwingMode).updateValue(this.fanState.Swing);
               this.platform.log.debug('Oscillation mode:', data.reported.shakehorizon);
               break;
             case 'hoscon':
               this.fanState.Swing = data.reported.hoscon;
+              this.service.getCharacteristic(this.platform.Characteristic.SwingMode).updateValue(this.fanState.Swing);
               this.platform.log.debug('Oscillation mode:', data.reported.hoscon);
               break;
             default:
