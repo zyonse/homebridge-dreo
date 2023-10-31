@@ -73,7 +73,7 @@ export class FanAccessory {
       this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
         .onSet(this.setSwingMode.bind(this))
         .onGet(this.getSwingMode.bind(this));
-      this.fanState.Swing = state.shakehorizon.state;
+      this.fanState.Swing = state[this.fanState.SwingMethod].state;
     }
 
     // update values from Dreo app
