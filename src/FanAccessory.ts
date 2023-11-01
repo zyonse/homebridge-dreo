@@ -135,6 +135,7 @@ export class FanAccessory {
               break;
             case 'temperature':
               this.fanState.Temperature = data.reported.temperature;
+              this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature).updateValue(this.fanState.Temperature);
               this.platform.log.debug('Temperature:', data.reported.temperature);
               break;
             default:
