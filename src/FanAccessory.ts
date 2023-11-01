@@ -201,6 +201,6 @@ export class FanAccessory {
 
   async getTemperature() {
     const offset = this.platform.config.temperatureOffset || 0; // default to 0 if not defined
-    return this.fanState.Temperature - offset;
+    return this.fanState.Temperature + offset;
   }
 }
