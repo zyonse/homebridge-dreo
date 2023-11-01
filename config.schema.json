@@ -41,9 +41,30 @@
       "temperatureOffset": {
         "title": "Temperature Offset",
         "type": "number",
+        "condition": {
+          "functionBody": "return model.hideTemperatureSensor === false;"
+        },
         "default": 0,
         "description": "Subtract (or add) a set amount from the temperature reading. (Use negative numbers to subtract.)"
       }
     }
-  }
+  },
+  "form": [
+    {
+      "type": "fieldset",
+      "title": "Dreo App Login",
+      "items": [
+        "options.email",
+        "options.password"
+      ]
+    },
+    {
+      "type": "fieldset",
+      "title": "Temperature Sensor",
+      "items": [
+        "hideTemperatureSensor",
+        "temperatureOffset"
+      ]
+    }
+  ]
 }
