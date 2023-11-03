@@ -134,8 +134,11 @@ export class FanAccessory {
               this.platform.log.debug('Oscillation mode:', data.reported.hoscon);
               break;
             case 'temperature':
-              this.fanState.Temperature = this.correctedTemperature(data.reported.temperature);
-              this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature).updateValue(this.fanState.Temperature);
+              if (this.temperatureService !== undefined && !shouldHideTemperatureSensor) {
+                this.fanState.Temperature = this.correctedTemperature(data.reported.temperature);
+                this.temperatureService.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
+                  .updateValue(this.fanState.Temperature);
+              }
               this.platform.log.debug('Temperature:', data.reported.temperature);
               break;
             default:
