@@ -82,7 +82,7 @@ export class FanAccessory {
 
     // If temperature is defined and we are not hiding the sensor
     if (state.temperature !== undefined && !shouldHideTemperatureSensor) {
-      this.fanState.Temperature = state.temperature.state;
+      this.fanState.Temperature = this.correctedTemperature(state.temperature.state);
 
       // Check if the Temperature Sensor service already exists, if not create a new one
       this.temperatureService = this.accessory.getService(this.platform.Service.TemperatureSensor);
@@ -135,7 +135,7 @@ export class FanAccessory {
               break;
             case 'temperature':
               if (this.temperatureService !== undefined && !shouldHideTemperatureSensor) {
-                this.fanState.Temperature = data.reported.temperature;
+                this.fanState.Temperature = this.correctedTemperature(data.reported.temperature);
                 this.temperatureService.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
                   .updateValue(this.fanState.Temperature);
               }
@@ -208,7 +208,12 @@ export class FanAccessory {
   }
 
   async getTemperature() {
+    return this.fanState.Temperature;
+  }
+
+  correctedTemperature(temperatureFromDreo) {
     const offset = this.platform.config.temperatureOffset || 0; // default to 0 if not defined
-    return this.fanState.Temperature + offset;
+    // Dreo response is always Fahrenheit - convert to Celsius which is what HomeKit expects
+    return ((temperatureFromDreo + offset) - 32) * 5 / 9;
   }
 }
