@@ -28,7 +28,10 @@
           "password": {
             "title": "Password",
             "type": "string",
-            "required": true
+            "required": true,
+            "x-schema-form": {
+              "type": "password"
+            }
           }
         }
       },
