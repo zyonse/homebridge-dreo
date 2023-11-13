@@ -8,9 +8,6 @@
       "name": {
         "title": "Name",
         "type": "string",
-        "condition": {
-          "functionBody": "return 0"
-        },
         "required": true,
         "default": "Dreo Platform",
         "description": "You shouldn't need to change this."
@@ -35,39 +32,20 @@
           }
         }
       },
-      "hideTemperatureSensor": {
-        "title": "Hide Temperature Sensor",
-        "type": "boolean",
-        "default": false,
-        "description": "Enable this option to hide the temperature sensor."
-      },
       "temperatureOffset": {
         "title": "Temperature Offset",
         "type": "number",
-        "condition": {
-          "functionBody": "return model.hideTemperatureSensor === false;"
-        },
         "default": 0,
         "description": "Subtract (or add) a set amount from the temperature reading. (Use negative numbers to subtract.)"
+      },
+      "deviceIds": {
+        "title": "Hide Temperature from individual fans",
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Add Device ID's to hide the temperature the device detects."
       }
     }
-  },
-  "form": [
-    {
-      "type": "fieldset",
-      "title": "Dreo App Login",
-      "items": [
-        "options.email",
-        "options.password"
-      ]
-    },
-    {
-      "type": "fieldset",
-      "title": "Temperature Sensor",
-      "items": [
-        "hideTemperatureSensor",
-        "temperatureOffset"
-      ]
-    }
-  ]
+  }
 }
