@@ -75,7 +75,7 @@ export class FanAccessory {
       this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
         .onSet(this.setSwingMode.bind(this))
         .onGet(this.getSwingMode.bind(this));
-      this.fanState.Swing = state.shakehorizon.state;
+      this.fanState.Swing = state[this.fanState.SwingMethod].state;
     }
 
     const isDeviceIdIncluded = this.platform.config.deviceIds?.includes(accessory.context.device.deviceId);
@@ -84,7 +84,7 @@ export class FanAccessory {
 
     // If temperature is defined and we are not hiding the sensor
     if (state.temperature !== undefined && !shouldHideTemperatureSensor) {
-      this.fanState.Temperature = state.temperature.state;
+      this.fanState.Temperature = this.correctedTemperature(state.temperature.state);
 
       // Check if the Temperature Sensor service already exists, if not create a new one
       this.temperatureService = this.accessory.getService(this.platform.Service.TemperatureSensor);
@@ -117,22 +117,30 @@ export class FanAccessory {
           switch(Object.keys(data.reported)[0]) {
             case 'poweron':
               this.fanState.On = data.reported.poweron;
+              this.service.getCharacteristic(this.platform.Characteristic.Active).updateValue(this.fanState.On);
               this.platform.log.debug('Fan power:', data.reported.poweron);
               break;
             case 'windlevel':
               this.fanState.Speed = data.reported.windlevel * 100 / this.fanState.MaxSpeed;
+              this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed).updateValue(this.fanState.Speed);
               this.platform.log.debug('Fan speed:', data.reported.windlevel);
               break;
             case 'shakehorizon':
               this.fanState.Swing = data.reported.shakehorizon;
+              this.service.getCharacteristic(this.platform.Characteristic.SwingMode).updateValue(this.fanState.Swing);
               this.platform.log.debug('Oscillation mode:', data.reported.shakehorizon);
               break;
             case 'hoscon':
               this.fanState.Swing = data.reported.hoscon;
+              this.service.getCharacteristic(this.platform.Characteristic.SwingMode).updateValue(this.fanState.Swing);
               this.platform.log.debug('Oscillation mode:', data.reported.hoscon);
               break;
             case 'temperature':
-              this.fanState.Temperature = data.reported.temperature;
+              if (this.temperatureService !== undefined && !shouldHideTemperatureSensor) {
+                this.fanState.Temperature = this.correctedTemperature(data.reported.temperature);
+                this.temperatureService.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
+                  .updateValue(this.fanState.Temperature);
+              }
               this.platform.log.debug('Temperature:', data.reported.temperature);
               break;
             default:
@@ -202,7 +210,12 @@ export class FanAccessory {
   }
 
   async getTemperature() {
+    return this.fanState.Temperature;
+  }
+
+  correctedTemperature(temperatureFromDreo) {
     const offset = this.platform.config.temperatureOffset || 0; // default to 0 if not defined
-    return this.fanState.Temperature - offset;
+    // Dreo response is always Fahrenheit - convert to Celsius which is what HomeKit expects
+    return ((temperatureFromDreo + offset) - 32) * 5 / 9;
   }
 }
