@@ -8,6 +8,7 @@ import { DreoPlatform } from './platform';
  */
 export class FanAccessory {
   private service: Service;
+  private temperatureService?: Service;
 
   // Cached copy of latest fan states
   private fanState = {
@@ -16,6 +17,7 @@ export class FanAccessory {
     Swing: false,
     SwingMethod: 'shakehorizon',  // some fans use hoscon instead of shakehorizon to control swing mode
     MaxSpeed: 1,
+    Temperature: 0,
   };
 
   constructor(
@@ -73,7 +75,31 @@ export class FanAccessory {
       this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
         .onSet(this.setSwingMode.bind(this))
         .onGet(this.getSwingMode.bind(this));
-      this.fanState.Swing = state.shakehorizon.state;
+      this.fanState.Swing = state[this.fanState.SwingMethod].state;
+    }
+
+    const shouldHideTemperatureSensor = this.platform.config.hideTemperatureSensor || false; // default to false if not defined
+
+    // If temperature is defined and we are not hiding the sensor
+    if (state.temperature !== undefined && !shouldHideTemperatureSensor) {
+      this.fanState.Temperature = this.correctedTemperature(state.temperature.state);
+
+      // Check if the Temperature Sensor service already exists, if not create a new one
+      this.temperatureService = this.accessory.getService(this.platform.Service.TemperatureSensor);
+
+      if (!this.temperatureService) {
+        this.temperatureService = this.accessory.addService(this.platform.Service.TemperatureSensor, 'Temperature Sensor');
+      }
+
+      // Bind the get handler for temperature to this service
+      this.temperatureService.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
+        .onGet(this.getTemperature.bind(this));
+    } else {
+      const existingTemperatureService = this.accessory.getService(this.platform.Service.TemperatureSensor);
+      if (existingTemperatureService) {
+        platform.log.debug('Hiding Temperature Sensor');
+        this.accessory.removeService(existingTemperatureService);
+      }
     }
 
     // update values from Dreo app
@@ -89,19 +115,31 @@ export class FanAccessory {
           switch(Object.keys(data.reported)[0]) {
             case 'poweron':
               this.fanState.On = data.reported.poweron;
+              this.service.getCharacteristic(this.platform.Characteristic.Active).updateValue(this.fanState.On);
               this.platform.log.debug('Fan power:', data.reported.poweron);
               break;
             case 'windlevel':
               this.fanState.Speed = data.reported.windlevel * 100 / this.fanState.MaxSpeed;
+              this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed).updateValue(this.fanState.Speed);
               this.platform.log.debug('Fan speed:', data.reported.windlevel);
               break;
             case 'shakehorizon':
               this.fanState.Swing = data.reported.shakehorizon;
+              this.service.getCharacteristic(this.platform.Characteristic.SwingMode).updateValue(this.fanState.Swing);
               this.platform.log.debug('Oscillation mode:', data.reported.shakehorizon);
               break;
             case 'hoscon':
               this.fanState.Swing = data.reported.hoscon;
+              this.service.getCharacteristic(this.platform.Characteristic.SwingMode).updateValue(this.fanState.Swing);
               this.platform.log.debug('Oscillation mode:', data.reported.hoscon);
+              break;
+            case 'temperature':
+              if (this.temperatureService !== undefined && !shouldHideTemperatureSensor) {
+                this.fanState.Temperature = this.correctedTemperature(data.reported.temperature);
+                this.temperatureService.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
+                  .updateValue(this.fanState.Temperature);
+              }
+              this.platform.log.debug('Temperature:', data.reported.temperature);
               break;
             default:
               platform.log.debug('Unknown command received:', Object.keys(data.reported)[0]);
@@ -167,5 +205,15 @@ export class FanAccessory {
 
   async getSwingMode() {
     return this.fanState.Swing;
+  }
+
+  async getTemperature() {
+    return this.fanState.Temperature;
+  }
+
+  correctedTemperature(temperatureFromDreo) {
+    const offset = this.platform.config.temperatureOffset || 0; // default to 0 if not defined
+    // Dreo response is always Fahrenheit - convert to Celsius which is what HomeKit expects
+    return ((temperatureFromDreo + offset) - 32) * 5 / 9;
   }
 }

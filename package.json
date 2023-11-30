@@ -1,12 +1,12 @@
 {
   "displayName": "Homebridge Dreo",
   "name": "homebridge-dreo",
-  "version": "3.0.1-beta.2",
+  "version": "3.2.2-beta.1",
   "description": "Homebridge Plugin for Dreo Smart Devices",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/zyonse/homebridge-dreo.git"
+    "url": "git+https://github.com/zyonse/homebridge-dreo.git"
   },
   "bugs": {
     "url": "https://github.com/zyonse/homebridge-dreo/issues"
