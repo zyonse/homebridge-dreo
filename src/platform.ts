@@ -129,13 +129,14 @@ export class DreoPlatform implements DynamicPlatformPlugin {
 
         // create the accessory handler for the restored accessory
         // this is imported from `platformAccessory.ts`
-        switch (device.seriesName) {
-          case 'fan':
+        switch (device.productName) {
+          case 'Tower Fan':
+          case 'Air Circulator':
             // create the accessory handler for the newly create accessory
             // this is imported from `platformAccessory.ts`
             new FanAccessory(this, existingAccessory, state, ws);
             break;
-          case 'Wall-mounted Heater':
+          case 'Heater':
             new HeaterAccessory(this, existingAccessory, state, ws);
             break;
           default:
@@ -160,13 +161,14 @@ export class DreoPlatform implements DynamicPlatformPlugin {
         // the `context` property can be used to store any data about the accessory you may need
         accessory.context.device = device;
 
-        switch (device.seriesName) {
+        switch (device.productName) {
           case 'Tower Fan':
+          case 'Air Circulator':
             // create the accessory handler for the newly create accessory
             // this is imported from `platformAccessory.ts`
             new FanAccessory(this, accessory, state, ws);
             break;
-          case 'Wall-mounted Heater':
+          case 'Heater':
             new HeaterAccessory(this, accessory, state, ws);
             break;
           default:
