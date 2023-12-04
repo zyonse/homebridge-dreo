@@ -107,18 +107,24 @@ export class HeaterAccessory {
         ) {
           switch (Object.keys(data.reported)[0]) {
             case 'temperature':
-              this.service.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits).updateValue(this.heaterState.TargetTemperature);
+              this.heaterState.Temperature = data.reported.temperature;
+              this.service.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits)
+                .updateValue(this.heaterState.TargetTemperature);
               this.platform.log.debug('Heater temp:', data.reported.temperate);
               break;
             case 'ecolevel':
-              this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature).updateValue(this.heaterState.TargetTemperature);
+              this.heaterState.TargetTemperature = data.reported.ecolevel;
+              this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
+                .updateValue(this.heaterState.TargetTemperature);
               this.platform.log.debug(
                 'Heater target temp:',
                 data.reported.ecolevel,
               );
               break;
             case 'poweron':
-              this.service.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState).updateValue(this.heaterState.On);
+              this.heaterState.On = data.reported.poweron;
+              this.service.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState)
+                .updateValue(this.heaterState.On);
               this.platform.log.debug('Heater on:', data.reported.poweron);
               break;
             default:
