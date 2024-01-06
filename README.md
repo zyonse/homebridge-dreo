@@ -12,7 +12,9 @@
 Homebridge plugin for Dreo brand smart devices.
 
 <p align="center">
-<img src="https://github.com/zyonse/homebridge-dreo/assets/28782587/557325f4-8872-40a7-b4a8-7a4ce5f55430" width=200>
+<img src="https://github.com/zyonse/homebridge-dreo/assets/28782587/dd396181-cd27-423c-be2c-fc5892bd3e32" width=200>
+<img src="https://github.com/zyonse/homebridge-dreo/assets/28782587/c7e9d5ac-7c20-4e19-939c-c4193effd46a" width=200>
+<img src="https://github.com/zyonse/homebridge-dreo/assets/28782587/bfe7311d-3e3d-444f-95a5-c8e1a1ebd8b9" width=200>
 </p>
 
 ## Compatability
@@ -28,10 +30,10 @@ Homebridge plugin for Dreo brand smart devices.
 - DR-HTF007S
 
 #### Table Fans
+* DR-HAF003S
+* DR-HAF004S
 
-- DR-HAF004S
-
-Please let me know if you have another model that works or doesn't work. The plugin _should_ also be compatible with multiple devices on the same account but I haven't tested this. Non-fan smart devices are not supported at this time, but if you have another device and can help me test some code out I would definitely be open to adding support.
+Please open an issue if you have another model that works or doesn't work. The plugin *should* also be compatible with multiple devices on the same account but I haven't tested this. Non-fan smart devices are not supported at this time, but if you have another device and can help me test some code out I would definitely be open to adding support.
 
 ## Features
 
