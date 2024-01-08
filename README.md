@@ -10,7 +10,7 @@
 [![verified-by-homebridge](https://badgen.net/badge/homebridge/verified/purple)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins)
 [![NPM Version](https://img.shields.io/npm/v/homebridge-dreo.svg)](https://www.npmjs.com/package/homebridge-dreo)
 
-Homebridge plugin for Dreo brand smart devices.
+Homebridge plugin for Dreo brand smart devices. [Dreo Fans on Amazon](https://www.amazon.com/s?k=Dreo+Smart+Fan&linkCode=ll2&tag=yozak-20&linkId=37ac94920f6842a3563ba383ded90e00&language=en_US&ref_=as_li_ss_tl) (Affiliate link)
 <p align="center">
 <img src="https://github.com/zyonse/homebridge-dreo/assets/28782587/dd396181-cd27-423c-be2c-fc5892bd3e32" width=200>
 <img src="https://github.com/zyonse/homebridge-dreo/assets/28782587/c7e9d5ac-7c20-4e19-939c-c4193effd46a" width=200>
