@@ -22,7 +22,7 @@ export default class DreoAPI {
         'timestamp': Date.now(),
       },
       headers: {
-        'ua': 'dreo/2.0.7 (sdk_gphone64_x86_64;android 13;Scale/2.625)',
+        'ua': 'dreo/2.5.12 (sdk_gphone64_arm64;android 13;Scale/2.625)',
         'lang': 'en',
         'content-type': 'application/json; charset=UTF-8',
         'accept-encoding': 'gzip',
@@ -50,7 +50,7 @@ export default class DreoAPI {
       },
       headers: {
         'authorization': 'Bearer ' + auth.access_token,
-        'ua': 'dreo/2.0.7 (sdk_gphone64_x86_64;android 13;Scale/2.625)',
+        'ua': 'dreo/2.5.12 (sdk_gphone64_arm64;android 13;Scale/2.625)',
         'lang': 'en',
         'accept-encoding': 'gzip',
         'user-agent': 'okhttp/4.9.1',
@@ -77,7 +77,7 @@ export default class DreoAPI {
       },
       headers: {
         'authorization': 'Bearer ' + auth.access_token,
-        'ua': 'dreo/2.0.7 (sdk_gphone64_x86_64;android 13;Scale/2.625)',
+        'ua': 'dreo/2.5.12 (sdk_gphone64_arm64;android 13;Scale/2.625)',
         'lang': 'en',
         'accept-encoding': 'gzip',
         'user-agent': 'okhttp/4.9.1',
