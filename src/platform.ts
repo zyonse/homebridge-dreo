@@ -2,6 +2,7 @@ import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, 
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { FanAccessory } from './FanAccessory';
+import { HeaterAccessory } from './HeaterAccessory';
 import DreoAPI from './DreoAPI';
 
 /**
@@ -128,7 +129,19 @@ export class DreoPlatform implements DynamicPlatformPlugin {
 
         // create the accessory handler for the restored accessory
         // this is imported from `platformAccessory.ts`
-        new FanAccessory(this, existingAccessory, state, ws);
+        switch (device.productName) {
+          case 'Tower Fan':
+          case 'Air Circulator':
+            // create the accessory handler for the newly create accessory
+            // this is imported from `platformAccessory.ts`
+            new FanAccessory(this, existingAccessory, state, ws);
+            break;
+          case 'Heater':
+            new HeaterAccessory(this, existingAccessory, state, ws);
+            break;
+          default:
+            this.log.error('error, unknown device type');
+        }
 
         // it is possible to remove platform accessories at any time using `api.unregisterPlatformAccessories`, eg.:
         // remove platform accessories when no longer present
@@ -141,13 +154,26 @@ export class DreoPlatform implements DynamicPlatformPlugin {
         // create a new accessory
         const accessory = new this.api.platformAccessory(device.deviceName, uuid);
 
+        this.log.info('Added new accessory:', device.deviceName);
+        this.log.info('With UUID:', uuid);
+
         // store a copy of the device object in the `accessory.context`
         // the `context` property can be used to store any data about the accessory you may need
         accessory.context.device = device;
 
-        // create the accessory handler for the newly create accessory
-        // this is imported from `platformAccessory.ts`
-        new FanAccessory(this, accessory, state, ws);
+        switch (device.productName) {
+          case 'Tower Fan':
+          case 'Air Circulator':
+            // create the accessory handler for the newly create accessory
+            // this is imported from `platformAccessory.ts`
+            new FanAccessory(this, accessory, state, ws);
+            break;
+          case 'Heater':
+            new HeaterAccessory(this, accessory, state, ws);
+            break;
+          default:
+            this.log.error('error, unknown device type');
+        }
 
         // link the accessory to your platform
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
