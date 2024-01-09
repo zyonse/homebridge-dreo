@@ -53,5 +53,10 @@ Provide your Dreo app login credentials
 }
 ```
 
+## Contributing
+If you'd like to add support for a new device type, you might find this writeup from [@JeffSteinbok](https://github.com/JeffSteinbok) (HomeAssistant plugin maintainer) useful for tracing the Dreo App:
+
+https://github.com/JeffSteinbok/hass-dreo/blob/main/contributing.md
+
 ## Special thanks
 [homebridge-tp-link-tapo](https://github.com/RaresAil/homebridge-tp-link-tapo): Similar repo that helped me figure out some of the http request functions necessary for this project.
