@@ -70,8 +70,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
     this.log.debug('\n\nREMOTE:\n', auth);
     // check if access_token is valid
     if (auth === undefined) {
-      this.log.error('Authentication error: Server returned invalid access_token');
-      this.log.error('Make sure your email/password are correct');
+      this.log.error('Authentication error: Failed to obtain access_token');
       return;
     }
     this.log.info('Country:', auth.countryCode);
