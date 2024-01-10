@@ -30,7 +30,14 @@ export default class DreoAPI {
       },
     })
       .then((response) => {
-        token = response.data.data;
+        const payload = response.data;
+        if (payload.data && payload.data.access_token) {
+          // Auth success
+          token = payload.data;
+        } else {
+          platform.log.error('error retrieving token:', payload.msg);
+          token = undefined;
+        }
       })
       .catch((error) => {
         platform.log.error('error retrieving token:', error);
