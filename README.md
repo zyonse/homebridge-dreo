@@ -8,9 +8,9 @@
 
 Homebridge plugin for Dreo brand smart devices. [Dreo Fans on Amazon](https://www.amazon.com/s?k=Dreo+Smart+Fan&linkCode=ll2&tag=yozak-20&linkId=37ac94920f6842a3563ba383ded90e00&language=en_US&ref_=as_li_ss_tl) (Affiliate link)
 <p align="center">
-  <img src="https://github.com/zyonse/homebridge-dreo/assets/28782587/dd396181-cd27-423c-be2c-fc5892bd3e32" width=200>
-  <img src="https://github.com/zyonse/homebridge-dreo/assets/28782587/c7e9d5ac-7c20-4e19-939c-c4193effd46a" width=200>
-  <img src="https://github.com/zyonse/homebridge-dreo/assets/28782587/bfe7311d-3e3d-444f-95a5-c8e1a1ebd8b9" width=200>
+  <img src="https://github.com/zyonse/homebridge-dreo/assets/28782587/7cd2578d-48a3-47bd-a5ed-dca129a02f91" width=200>
+  <img src="https://github.com/zyonse/homebridge-dreo/assets/28782587/1f1d85e6-5bbf-46b5-be7f-6edf95727327" width=200>
+  <img src="https://github.com/zyonse/homebridge-dreo/assets/28782587/d5095dd8-3dbe-4f31-9309-1b37c6f62eeb" width=200>
 </p>
 
 ## Compatability
