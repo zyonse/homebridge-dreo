@@ -78,9 +78,7 @@ export class FanAccessory {
       this.fanState.Swing = state[this.fanState.SwingMethod].state;
     }
 
-    const isDeviceIdIncluded = this.platform.config.deviceIds?.includes(accessory.context.device.deviceId);
-
-    const shouldHideTemperatureSensor = isDeviceIdIncluded;
+    const shouldHideTemperatureSensor = this.platform.config.hideTemperatureSensor || false; // default to false if not defined
 
     // If temperature is defined and we are not hiding the sensor
     if (state.temperature !== undefined && !shouldHideTemperatureSensor) {

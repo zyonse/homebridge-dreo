@@ -119,7 +119,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
 
       if (existingAccessory) {
         // the accessory already exists
-        this.log.info('Restoring existing accessory from cache:', device.deviceName + '; Device id:', device.deviceId);
+        this.log.info('Restoring existing accessory from cache:', device.deviceName);
 
         // if you need to update the accessory.context then you should run `api.updatePlatformAccessories`. eg.:
         // existingAccessory.context.device = device;
@@ -135,7 +135,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
         // this.log.info('Removing existing accessory from cache:', existingAccessory.displayName);
       } else {
         // the accessory does not yet exist, so we need to create it
-        this.log.info('Adding new accessory:', device.deviceName + '; Device id:', device.deviceId);
+        this.log.info('Adding new accessory:', device.deviceName);
 
         // create a new accessory
         const accessory = new this.api.platformAccessory(device.deviceName, uuid);
