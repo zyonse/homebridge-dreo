@@ -40,18 +40,18 @@ npm i homebridge-dreo
 ## Configuration
 Provide your Dreo app login credentials
 ```json
-{
-  "platforms": [
-    {
-      "options": {
-        "email": "email@example.com",
-        "password": "00000000"
-      },
-      "name": "Dreo Platform",
-      "platform": "DreoPlatform"
-    }
-  ]
-}
+"platforms": [
+  {
+    "options": {
+      "email": "email@example.com",
+      "password": "00000000"
+    },
+    "hideTemperatureSensor": false,
+    "temperatureOffset": 0,
+    "name": "Dreo Platform",
+    "platform": "DreoPlatform"
+  }
+]
 ```
 
 ## Contributing
