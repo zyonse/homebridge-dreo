@@ -5,6 +5,7 @@
 # Homebridge Dreo Plugin
 [![verified-by-homebridge](https://badgen.net/badge/homebridge/verified/purple)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins)
 [![NPM Version](https://img.shields.io/npm/v/homebridge-dreo.svg)](https://www.npmjs.com/package/homebridge-dreo)
+[![npm](https://img.shields.io/npm/dt/homebridge-dreo)](https://www.npmjs.com/package/homebridge-dreo)
 
 Homebridge plugin for Dreo brand smart devices. [Dreo Fans on Amazon](https://www.amazon.com/s?k=Dreo+Smart+Fan&linkCode=ll2&tag=zyonse-20&linkId=45e21dea18d40bc4d1d9244334dae1fe&language=en_US&ref_=as_li_ss_tl) (Affiliate link)
 <p align="center">
