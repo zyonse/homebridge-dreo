@@ -33,7 +33,7 @@ Please open an issue if you have another model that works or doesn't work. The p
 
 ## Installation
 ```
-npm i homebridge-dreo
+npm install -g homebridge-dreo
 ```
 
 (Or install through the Homebridge UI)
