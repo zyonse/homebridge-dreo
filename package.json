@@ -1,7 +1,7 @@
 {
   "displayName": "Homebridge Dreo",
   "name": "homebridge-dreo",
-  "version": "3.2.4",
+  "version": "3.2.5-beta.0",
   "description": "Homebridge Plugin for Dreo Smart Devices",
   "license": "Apache-2.0",
   "repository": {
