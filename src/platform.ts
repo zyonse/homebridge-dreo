@@ -133,9 +133,10 @@ export class DreoPlatform implements DynamicPlatformPlugin {
             new FanAccessory(this, existingAccessory, state, ws);
             break;
           case 'Heater':
+            this.log.error('error, unsupported device type:', device.productName);
             break;
           default:
-            this.log.error('error, unknown device type');
+            this.log.error('error, unknown device type:', device.productName);
         }
 
         // it is possible to remove platform accessories at any time using `api.unregisterPlatformAccessories`, eg.:
@@ -163,9 +164,10 @@ export class DreoPlatform implements DynamicPlatformPlugin {
             new FanAccessory(this, accessory, state, ws);
             break;
           case 'Heater':
+            this.log.error('error, unsupported device type:', device.productName);
             break;
           default:
-            this.log.error('error, unknown device type');
+            this.log.error('error, unknown device type:', device.productName);
         }
 
         // link the accessory to your platform
