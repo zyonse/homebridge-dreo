@@ -116,7 +116,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
         this.log.error('error, could not retrieve device state');
         return;
       }
-this.log.debug('Accessory state:', state);
+      this.log.debug('Accessory state:', state);
 
       if (existingAccessory) {
         // the accessory already exists
@@ -128,16 +128,12 @@ this.log.debug('Accessory state:', state);
 
         // create the accessory handler for the restored accessory
         // this is imported from `platformAccessory.ts`
-        switch (device.productName) {
-          case 'Tower Fan':
-          case 'Air Circulator':
-            new FanAccessory(this, existingAccessory, state, ws);
-            break;
-          case 'Heater':
-            this.log.error('error, unsupported device type:', device.productName);
-            break;
-          default:
-            this.log.error('error, unknown device type:', device.productName);
+
+        // if windlevel exists, device is a fan
+        if (state.windlevel !== undefined) {
+          new FanAccessory(this, existingAccessory, state, ws);
+        } else {
+          this.log.error('error, unknown device type:', device.productName);
         }
 
         // it is possible to remove platform accessories at any time using `api.unregisterPlatformAccessories`, eg.:
@@ -157,18 +153,11 @@ this.log.debug('Accessory state:', state);
 
         // create the accessory handler for the newly create accessory
         // this is imported from `platformAccessory.ts`
-        switch (device.productName) {
-          case 'Tower Fan':
-          case 'Air Circulator':
-            // create the accessory handler for the newly create accessory
-            // this is imported from `platformAccessory.ts`
-            new FanAccessory(this, accessory, state, ws);
-            break;
-          case 'Heater':
-            this.log.error('error, unsupported device type:', device.productName);
-            break;
-          default:
-            this.log.error('error, unknown device type:', device.productName);
+
+        if (state.windlevel !== undefined) {
+          new FanAccessory(this, accessory, state, ws);
+        } else {
+          this.log.error('error, unknown device type:', device.productName);
         }
 
         // link the accessory to your platform
