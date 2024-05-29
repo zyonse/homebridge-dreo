@@ -116,6 +116,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
         this.log.error('error, could not retrieve device state');
         return;
       }
+this.log.debug('Accessory state:', state);
 
       if (existingAccessory) {
         // the accessory already exists
