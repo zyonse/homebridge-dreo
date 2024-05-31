@@ -15,7 +15,8 @@ export class FanAccessory {
     On: false,
     Speed: 1,
     Swing: false,
-    SwingMethod: 'shakehorizon',  // some fans use hoscon instead of shakehorizon to control swing mode
+    SwingMethod: 'shakehorizon',  // some fans use hoscon or oscmode instead of shakehorizon to control swing mode
+    LockPhysicalControls: this.platform.Characteristic.LockPhysicalControls.CONTROL_LOCK_DISABLED,
     MaxSpeed: 1,
     Temperature: 0,
   };
@@ -80,6 +81,15 @@ export class FanAccessory {
       this.fanState.Swing = state[this.fanState.SwingMethod].state;
     }
 
+    // check if child lock is supported
+    if (state.childlockon !== undefined) {
+      // register handlers for Lock Physical Controls
+      this.service.getCharacteristic(this.platform.Characteristic.LockPhysicalControls)
+        .onSet(this.setLockPhysicalControls.bind(this))
+        .onGet(this.getLockPhysicalControls.bind(this));
+      this.fanState.LockPhysicalControls = this.getChildLockCharacteristic(state.childlockon.state);
+    }
+
     const shouldHideTemperatureSensor = this.platform.config.hideTemperatureSensor || false; // default to false if not defined
 
     // If temperature is defined and we are not hiding the sensor
@@ -140,6 +150,12 @@ export class FanAccessory {
               this.service.getCharacteristic(this.platform.Characteristic.SwingMode).updateValue(this.fanState.Swing);
               this.platform.log.debug('Oscillation mode:', data.reported.oscmode);
               break;
+            case 'childlockon':
+              this.fanState.LockPhysicalControls = this.getChildLockCharacteristic(data.reported.childlockon)
+              this.service.getCharacteristic(this.platform.Characteristic.LockPhysicalControls)
+                .updateValue(this.fanState.LockPhysicalControls);
+              this.platform.log.debug('Child lock:', data.reported.childlockon);
+              break;
             case 'temperature':
               if (this.temperatureService !== undefined && !shouldHideTemperatureSensor) {
                 this.fanState.Temperature = this.correctedTemperature(data.reported.temperature);
@@ -154,6 +170,12 @@ export class FanAccessory {
         }
       }
     });
+  }
+
+  getChildLockCharacteristic(value: boolean) {
+    return value
+      ? this.platform.Characteristic.LockPhysicalControls.CONTROL_LOCK_ENABLED
+      : this.platform.Characteristic.LockPhysicalControls.CONTROL_LOCK_DISABLED;
   }
 
   // Handle requests to set the "Active" characteristic
@@ -216,6 +238,20 @@ export class FanAccessory {
 
   async getTemperature() {
     return this.fanState.Temperature;
+  }
+
+  // turn child lock on/off
+  async setLockPhysicalControls(value) {
+    this.ws.send(JSON.stringify({
+      'devicesn': this.accessory.context.device.sn,
+      'method': 'control',
+      'params': {'childlockon': value === this.platform.Characteristic.LockPhysicalControls.CONTROL_LOCK_ENABLED},
+      'timestamp': Date.now(),
+    }));
+  }
+
+  getLockPhysicalControls() {
+    return this.fanState.LockPhysicalControls;
   }
 
   correctedTemperature(temperatureFromDreo) {
