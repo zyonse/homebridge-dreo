@@ -16,8 +16,8 @@ export class FanAccessory {
     Speed: 1,
     Swing: false,
     SwingMethod: 'shakehorizon',  // some fans use hoscon or oscmode instead of shakehorizon to control swing mode
-    Mode: this.platform.Characteristic.TargetFanState.MANUAL,
-    LockPhysicalControls: this.platform.Characteristic.LockPhysicalControls.CONTROL_LOCK_DISABLED,
+    AutoMode: false,
+    LockPhysicalControls: false,
     MaxSpeed: 1,
     Temperature: 0,
   };
@@ -88,7 +88,7 @@ export class FanAccessory {
       this.service.getCharacteristic(this.platform.Characteristic.TargetFanState)
         .onSet(this.setMode.bind(this))
         .onGet(this.getMode.bind(this));
-      this.fanState.Mode = this.getTargetFanStateCharacteristic(state.mode.state);
+      this.fanState.AutoMode = this.convertModeToBoolean(state.mode.state);
     }
 
     // check if child lock is supported
@@ -97,7 +97,7 @@ export class FanAccessory {
       this.service.getCharacteristic(this.platform.Characteristic.LockPhysicalControls)
         .onSet(this.setLockPhysicalControls.bind(this))
         .onGet(this.getLockPhysicalControls.bind(this));
-      this.fanState.LockPhysicalControls = this.getChildLockCharacteristic(state.childlockon.state);
+      this.fanState.LockPhysicalControls = Boolean(state.childlockon.state);
     }
 
     const shouldHideTemperatureSensor = this.platform.config.hideTemperatureSensor || false; // default to false if not defined
@@ -161,12 +161,13 @@ export class FanAccessory {
               this.platform.log.debug('Oscillation mode:', data.reported.oscmode);
               break;
             case 'mode':
-              this.fanState.Mode = this.getTargetFanStateCharacteristic(data.reported.mode);
-              this.service.getCharacteristic(this.platform.Characteristic.TargetFanState).updateValue(this.fanState.Mode);
+              this.fanState.AutoMode = this.convertModeToBoolean(data.reported.mode);
+              this.service.getCharacteristic(this.platform.Characteristic.TargetFanState)
+                .updateValue(this.fanState.AutoMode);
               this.platform.log.debug('Fan mode:', data.reported.mode);
               break;
             case 'childlockon':
-              this.fanState.LockPhysicalControls = this.getChildLockCharacteristic(data.reported.childlockon)
+              this.fanState.LockPhysicalControls = Boolean(data.reported.childlockon);
               this.service.getCharacteristic(this.platform.Characteristic.LockPhysicalControls)
                 .updateValue(this.fanState.LockPhysicalControls);
               this.platform.log.debug('Child lock:', data.reported.childlockon);
@@ -185,19 +186,6 @@ export class FanAccessory {
         }
       }
     });
-  }
-
-  getTargetFanStateCharacteristic(value: number) {
-    // Show all non-automatic modes as MANUAL
-    return value === 4
-      ? this.platform.Characteristic.TargetFanState.AUTO
-      : this.platform.Characteristic.TargetFanState.MANUAL;
-  }
-
-  getChildLockCharacteristic(value: boolean) {
-    return value
-      ? this.platform.Characteristic.LockPhysicalControls.CONTROL_LOCK_ENABLED
-      : this.platform.Characteristic.LockPhysicalControls.CONTROL_LOCK_DISABLED;
   }
 
   // Handle requests to set the "Active" characteristic
@@ -269,7 +257,7 @@ export class FanAccessory {
   }
 
   async getMode() {
-    return this.fanState.Mode;
+    return this.fanState.AutoMode;
   }
 
   // turn child lock on/off
@@ -277,7 +265,7 @@ export class FanAccessory {
     this.ws.send(JSON.stringify({
       'devicesn': this.accessory.context.device.sn,
       'method': 'control',
-      'params': {'childlockon': value === this.platform.Characteristic.LockPhysicalControls.CONTROL_LOCK_ENABLED},
+      'params': {'childlockon': Number(value)},
       'timestamp': Date.now(),
     }));
   }
@@ -294,5 +282,10 @@ export class FanAccessory {
     const offset = this.platform.config.temperatureOffset || 0; // default to 0 if not defined
     // Dreo response is always Fahrenheit - convert to Celsius which is what HomeKit expects
     return ((temperatureFromDreo + offset) - 32) * 5 / 9;
+  }
+
+  convertModeToBoolean(value: number) {
+    // Show all non-automatic modes as "Manual"
+    return value === 4;
   }
 }
