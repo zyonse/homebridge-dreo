@@ -66,10 +66,12 @@ export class FanAccessory {
       .onGet(this.getRotationSpeed.bind(this));
 
     // check whether fan supports oscillation
-    if (state.shakehorizon !== undefined || state.hoscon !== undefined) {
+    if (state.shakehorizon !== undefined || state.hoscon !== undefined || state.oscmode !== undefined) {
       // some fans use different commands to toggle oscillation, determine which one should be used
       if (state.hoscon !== undefined) {
         this.fanState.SwingMethod = 'hoscon';
+      } else if (state.oscmode !== undefined) {
+        this.fanState.SwingMethod = 'oscmode';
       }
       // register handlers for Swing Mode (oscillation)
       this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
@@ -132,6 +134,11 @@ export class FanAccessory {
               this.fanState.Swing = data.reported.hoscon;
               this.service.getCharacteristic(this.platform.Characteristic.SwingMode).updateValue(this.fanState.Swing);
               this.platform.log.debug('Oscillation mode:', data.reported.hoscon);
+              break;
+            case 'oscmode':
+              this.fanState.Swing = Boolean(data.reported.oscmode);
+              this.service.getCharacteristic(this.platform.Characteristic.SwingMode).updateValue(this.fanState.Swing);
+              this.platform.log.debug('Oscillation mode:', data.reported.oscmode);
               break;
             case 'temperature':
               if (this.temperatureService !== undefined && !shouldHideTemperatureSensor) {
@@ -198,7 +205,7 @@ export class FanAccessory {
     this.ws.send(JSON.stringify({
       'devicesn': this.accessory.context.device.sn,
       'method': 'control',
-      'params': {[this.fanState.SwingMethod]: Boolean(value)},
+      'params': {[this.fanState.SwingMethod]: this.fanState.SwingMethod === 'oscmode' ? Number(value) : Boolean(value)},
       'timestamp': Date.now(),
     }));
   }
