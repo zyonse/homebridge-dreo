@@ -15,7 +15,7 @@ export class FanAccessory {
     On: false,
     Speed: 1,
     Swing: false,
-    SwingMethod: 'shakehorizon',  // some fans use hoscon or oscmode instead of shakehorizon to control swing mode
+    SwingMethod: 'none',  // Variable used to control oscillation (shakehorizon, hoscon, oscmode)
     AutoMode: false,
     LockPhysicalControls: false,
     MaxSpeed: 1,
@@ -67,14 +67,17 @@ export class FanAccessory {
       .onSet(this.setRotationSpeed.bind(this))
       .onGet(this.getRotationSpeed.bind(this));
 
-    // check whether fan supports oscillation
-    if (state.shakehorizon !== undefined || state.hoscon !== undefined || state.oscmode !== undefined) {
-      // some fans use different commands to toggle oscillation, determine which one should be used
-      if (state.hoscon !== undefined) {
-        this.fanState.SwingMethod = 'hoscon';
-      } else if (state.oscmode !== undefined) {
-        this.fanState.SwingMethod = 'oscmode';
-      }
+    // Check whether fan supports oscillation
+    // Some fans use different commands to toggle oscillation, determine which one should be used
+    if (state.shakehorizon !== undefined) {
+      this.fanState.SwingMethod = 'shakehorizon';
+    } else if (state.hoscon !== undefined) {
+      this.fanState.SwingMethod = 'hoscon';
+    } else if (state.oscmode !== undefined) {
+      this.fanState.SwingMethod = 'oscmode';
+    }
+
+    if (this.fanState.SwingMethod !== 'none') {
       // register handlers for Swing Mode (oscillation)
       this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
         .onSet(this.setSwingMode.bind(this))
@@ -82,18 +85,18 @@ export class FanAccessory {
       this.fanState.Swing = state[this.fanState.SwingMethod].state;
     }
 
-    // check if mode control is supported
+    // Check if mode control is supported
     if (state.mode !== undefined) {
-      // register handlers for Target Fan State
+      // Register handlers for Target Fan State
       this.service.getCharacteristic(this.platform.Characteristic.TargetFanState)
         .onSet(this.setMode.bind(this))
         .onGet(this.getMode.bind(this));
       this.fanState.AutoMode = this.convertModeToBoolean(state.mode.state);
     }
 
-    // check if child lock is supported
+    // Check if child lock is supported
     if (state.childlockon !== undefined) {
-      // register handlers for Lock Physical Controls
+      // Register handlers for Lock Physical Controls
       this.service.getCharacteristic(this.platform.Characteristic.LockPhysicalControls)
         .onSet(this.setLockPhysicalControls.bind(this))
         .onGet(this.getLockPhysicalControls.bind(this));
@@ -137,27 +140,32 @@ export class FanAccessory {
           switch(Object.keys(data.reported)[0]) {
             case 'poweron':
               this.fanState.On = data.reported.poweron;
-              this.service.getCharacteristic(this.platform.Characteristic.Active).updateValue(this.fanState.On);
+              this.service.getCharacteristic(this.platform.Characteristic.Active)
+                .updateValue(this.fanState.On);
               this.platform.log.debug('Fan power:', data.reported.poweron);
               break;
             case 'windlevel':
               this.fanState.Speed = data.reported.windlevel * 100 / this.fanState.MaxSpeed;
-              this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed).updateValue(this.fanState.Speed);
+              this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
+                .updateValue(this.fanState.Speed);
               this.platform.log.debug('Fan speed:', data.reported.windlevel);
               break;
             case 'shakehorizon':
               this.fanState.Swing = data.reported.shakehorizon;
-              this.service.getCharacteristic(this.platform.Characteristic.SwingMode).updateValue(this.fanState.Swing);
+              this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
+                .updateValue(this.fanState.Swing);
               this.platform.log.debug('Oscillation mode:', data.reported.shakehorizon);
               break;
             case 'hoscon':
               this.fanState.Swing = data.reported.hoscon;
-              this.service.getCharacteristic(this.platform.Characteristic.SwingMode).updateValue(this.fanState.Swing);
+              this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
+                .updateValue(this.fanState.Swing);
               this.platform.log.debug('Oscillation mode:', data.reported.hoscon);
               break;
             case 'oscmode':
               this.fanState.Swing = Boolean(data.reported.oscmode);
-              this.service.getCharacteristic(this.platform.Characteristic.SwingMode).updateValue(this.fanState.Swing);
+              this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
+                .updateValue(this.fanState.Swing);
               this.platform.log.debug('Oscillation mode:', data.reported.oscmode);
               break;
             case 'mode':
@@ -246,7 +254,7 @@ export class FanAccessory {
     return this.fanState.Swing;
   }
 
-  // set fan mode
+  // Set fan mode
   async setMode(value) {
     this.ws.send(JSON.stringify({
       'devicesn': this.accessory.context.device.sn,
@@ -260,7 +268,7 @@ export class FanAccessory {
     return this.fanState.AutoMode;
   }
 
-  // turn child lock on/off
+  // Turn child lock on/off
   async setLockPhysicalControls(value) {
     this.ws.send(JSON.stringify({
       'devicesn': this.accessory.context.device.sn,
@@ -286,6 +294,6 @@ export class FanAccessory {
 
   convertModeToBoolean(value: number) {
     // Show all non-automatic modes as "Manual"
-    return value === 4;
+    return (value === 4);
   }
 }
