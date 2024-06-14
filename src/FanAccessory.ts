@@ -13,6 +13,7 @@ export class FanAccessory {
   // Cached copy of latest fan states
   private fanState = {
     On: false,
+    PowerMethod: 'none',  // Variable used to control power (poweron, fanon)
     Speed: 1,
     Swing: false,
     SwingMethod: 'none',  // Variable used to control oscillation (shakehorizon, hoscon, oscmode)
@@ -36,11 +37,18 @@ export class FanAccessory {
       .setCharacteristic(this.platform.Characteristic.SerialNumber, accessory.context.device.sn);
 
     // Initialize fan values
-    // Get max fan speed from config
+    // Get max fan speed from Dreo report
     this.fanState.MaxSpeed = accessory.context.device.controlsConf.control[1].items[1].text;
-    // Load current state from Dreo servers
-    this.fanState.On = state.poweron.state;
+    // Load current state from Dreo report
     this.fanState.Speed = state.windlevel.state * 100 / this.fanState.MaxSpeed;
+    // Some fans use different commands to toggle power, determine which one should be used
+    if (state.fanon !== undefined) {
+      this.fanState.PowerMethod = 'fanon';
+      this.fanState.On = state.fanon.state;
+    } else {
+      this.fanState.PowerMethod = 'poweron';
+      this.fanState.On = state.poweron.state;
+    }
 
     // Get the Fanv2 service if it exists, otherwise create a new Fanv2 service
     // You can create multiple services for each accessory
@@ -143,6 +151,12 @@ export class FanAccessory {
                 .updateValue(this.fanState.On);
               this.platform.log.debug('Fan power:', data.reported.poweron);
               break;
+            case 'fanon':
+              this.fanState.On = data.reported.fanon;
+              this.service.getCharacteristic(this.platform.Characteristic.Active)
+                .updateValue(this.fanState.On);
+              this.platform.log.debug('Fan power:', data.reported.fanon);
+              break;
             case 'windlevel':
               this.fanState.Speed = data.reported.windlevel * 100 / this.fanState.MaxSpeed;
               this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
@@ -204,7 +218,7 @@ export class FanAccessory {
       this.ws.send(JSON.stringify({
         'devicesn': this.accessory.context.device.sn,
         'method': 'control',
-        'params': {'poweron': Boolean(value)},
+        'params': {PowerMethod: Boolean(value)},
         'timestamp': Date.now(),
       }));
     }
@@ -226,8 +240,7 @@ export class FanAccessory {
         'devicesn': this.accessory.context.device.sn,
         'method': 'control',
         'params': {
-          // Setting poweron to true prevents fan speed from being overriden
-          'poweron': true,
+          PowerMethod: true,  // Setting power state to true ensures the fan is actually on
           'windlevel': converted,
         },
         'timestamp': Date.now(),
