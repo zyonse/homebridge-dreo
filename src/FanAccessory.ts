@@ -13,10 +13,10 @@ export class FanAccessory {
   // Cached copy of latest fan states
   private fanState = {
     On: false,
-    PowerMethod: 'none',  // Variable used to control power (poweron, fanon)
+    PowerCMD: 'none',  // Command used to control power (poweron, fanon)
     Speed: 1,
     Swing: false,
-    SwingMethod: 'none',  // Variable used to control oscillation (shakehorizon, hoscon, oscmode)
+    SwingCMD: 'none',  // Command used to control oscillation (shakehorizon, hoscon, oscmode)
     AutoMode: false,
     LockPhysicalControls: false,
     MaxSpeed: 1,
@@ -37,19 +37,15 @@ export class FanAccessory {
       .setCharacteristic(this.platform.Characteristic.SerialNumber, accessory.context.device.sn);
 
     // Initialize fan values
-    // Get max fan speed from Dreo report
+    // Get max fan speed from Dreo API
     platform.log.debug('Control parameters: ', accessory.context.device.controlsConf.control);
-    this.fanState.MaxSpeed = accessory.context.device.controlsConf.control[1].items[1].text;
-    // Load current state from Dreo report
+    this.fanState.MaxSpeed = accessory.context.device.controlsConf.control.find(params => params.type === 'Speed').items[1].text;
+    // Load current state from Dreo API
     this.fanState.Speed = state.windlevel.state * 100 / this.fanState.MaxSpeed;
     // Some fans use different commands to toggle power, determine which one should be used
-    if (state.fanon !== undefined) {
-      this.fanState.PowerMethod = 'fanon';
-      this.fanState.On = state.fanon.state;
-    } else {
-      this.fanState.PowerMethod = 'poweron';
-      this.fanState.On = state.poweron.state;
-    }
+    this.fanState.PowerCMD = accessory.context.device.controlsConf.lottie.key;
+    this.fanState.On = state[this.fanState.PowerCMD].state;
+
 
     // Get the Fanv2 service if it exists, otherwise create a new Fanv2 service
     // You can create multiple services for each accessory
@@ -77,20 +73,17 @@ export class FanAccessory {
 
     // Check whether fan supports oscillation
     // Some fans use different commands to toggle oscillation, determine which one should be used
-    if (state.shakehorizon !== undefined) {
-      this.fanState.SwingMethod = 'shakehorizon';
-    } else if (state.hoscon !== undefined) {
-      this.fanState.SwingMethod = 'hoscon';
-    } else if (state.oscmode !== undefined) {
-      this.fanState.SwingMethod = 'oscmode';
+    const swing = accessory.context.device.controlsConf.control.find(params => params.type === 'Oscillation');
+    if (swing !== undefined) {
+      this.fanState.SwingCMD = swing.cmd;
     }
 
-    if (this.fanState.SwingMethod !== 'none') {
+    if (this.fanState.SwingCMD !== 'none') {
       // Register handlers for Swing Mode (oscillation)
       this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
         .onSet(this.setSwingMode.bind(this))
         .onGet(this.getSwingMode.bind(this));
-      this.fanState.Swing = state[this.fanState.SwingMethod].state;
+      this.fanState.Swing = state[this.fanState.SwingCMD].state;
     }
 
     // Check if mode control is supported
@@ -219,7 +212,7 @@ export class FanAccessory {
       this.ws.send(JSON.stringify({
         'devicesn': this.accessory.context.device.sn,
         'method': 'control',
-        'params': {PowerMethod: Boolean(value)},
+        'params': {[this.fanState.PowerCMD]: Boolean(value)},
         'timestamp': Date.now(),
       }));
     }
@@ -241,7 +234,7 @@ export class FanAccessory {
         'devicesn': this.accessory.context.device.sn,
         'method': 'control',
         'params': {
-          PowerMethod: true,  // Setting power state to true ensures the fan is actually on
+          [this.fanState.PowerCMD]: true,  // Setting power state to true ensures the fan is actually on
           'windlevel': converted,
         },
         'timestamp': Date.now(),
@@ -258,7 +251,7 @@ export class FanAccessory {
     this.ws.send(JSON.stringify({
       'devicesn': this.accessory.context.device.sn,
       'method': 'control',
-      'params': {[this.fanState.SwingMethod]: this.fanState.SwingMethod === 'oscmode' ? Number(value) : Boolean(value)},
+      'params': {[this.fanState.SwingCMD]: this.fanState.SwingCMD === 'oscmode' ? Number(value) : Boolean(value)},
       'timestamp': Date.now(),
     }));
   }
