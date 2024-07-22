@@ -43,9 +43,13 @@ export class FanAccessory {
     // Load current state from Dreo API
     this.fanState.Speed = state.windlevel.state * 100 / this.fanState.MaxSpeed;
     // Some fans use different commands to toggle power, determine which one should be used
-    this.fanState.PowerCMD = accessory.context.device.controlsConf.lottie.key;
-    this.fanState.On = state[this.fanState.PowerCMD].state;
-
+    if (state.fanon !== undefined) {
+      this.fanState.PowerCMD = 'fanon';
+      this.fanState.On = state.fanon.state;
+    } else {
+      this.fanState.PowerCMD = 'poweron';
+      this.fanState.On = state.poweron.state;
+    }
 
     // Get the Fanv2 service if it exists, otherwise create a new Fanv2 service
     // You can create multiple services for each accessory
