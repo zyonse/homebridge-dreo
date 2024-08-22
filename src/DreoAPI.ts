@@ -4,7 +4,7 @@ import ReconnectingWebSocket from 'reconnecting-websocket';
 import WebSocket from 'ws';
 
 // User agent string for API requests
-const ua = 'dreo/2.8.2';
+const ua = 'dreo/2.8.1 (iPhone; iOS 17.6.1; Scale/3.00)';
 
 // Follows same request structure as the mobile app
 export default class DreoAPI {
