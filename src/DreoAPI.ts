@@ -3,6 +3,9 @@ import MD5 from 'crypto-js/md5';
 import ReconnectingWebSocket from 'reconnecting-websocket';
 import WebSocket from 'ws';
 
+// User agent string for API requests
+const ua = 'dreo/2.8.2';
+
 // Follows same request structure as the mobile app
 export default class DreoAPI {
   // Get authentication token
@@ -22,7 +25,7 @@ export default class DreoAPI {
         'timestamp': Date.now(),
       },
       headers: {
-        'ua': 'dreo/2.5.12 (sdk_gphone64_arm64;android 13;Scale/2.625)',
+        'ua': ua,
         'lang': 'en',
         'content-type': 'application/json; charset=UTF-8',
         'accept-encoding': 'gzip',
@@ -57,7 +60,7 @@ export default class DreoAPI {
       },
       headers: {
         'authorization': 'Bearer ' + auth.access_token,
-        'ua': 'dreo/2.5.12 (sdk_gphone64_arm64;android 13;Scale/2.625)',
+        'ua': ua,
         'lang': 'en',
         'accept-encoding': 'gzip',
         'user-agent': 'okhttp/4.9.1',
@@ -84,7 +87,7 @@ export default class DreoAPI {
       },
       headers: {
         'authorization': 'Bearer ' + auth.access_token,
-        'ua': 'dreo/2.5.12 (sdk_gphone64_arm64;android 13;Scale/2.625)',
+        'ua': ua,
         'lang': 'en',
         'accept-encoding': 'gzip',
         'user-agent': 'okhttp/4.9.1',
