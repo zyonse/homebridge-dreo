@@ -24,6 +24,7 @@ Homebridge plugin for Dreo brand smart devices. [Dreo Fans on Amazon](https://ww
 * DR-HTF007S
 #### Pedestal Fans
 * DR-HPF001S
+* DR-HPF002S
 * DR-HAF003S
 #### Other Fans
 * DR-HAF004S (Table Fan)
