@@ -46,9 +46,8 @@ export class DreoPlatform implements DynamicPlatformPlugin {
   }
 
   /**
-   * This is an example method showing how to register discovered accessories.
-   * Accessories must only be registered once, previously created accessories
-   * must not be registered again to prevent "duplicate UUID" errors.
+   * Log into Dreo services, retrieve the user's devices, and register them as accessories
+   * Also remove accessories that are no longer present on the user's account
    */
   async discoverDevices() {
     const email = this.config.options.email;
@@ -94,6 +93,16 @@ export class DreoPlatform implements DynamicPlatformPlugin {
     if (dreoDevices === undefined) {
       this.log.error('error: Failed to retrieve device list');
       return;
+    }
+
+    // Create a set of UUIDs for the currently discovered devices
+    const discoveredDeviceUUIDs = new Set(dreoDevices.map(device => this.api.hap.uuid.generate(device.sn)));
+
+    // Unregister accessories that are no longer present
+    const accessoriesToRemove = this.accessories.filter(accessory => !discoveredDeviceUUIDs.has(accessory.UUID));
+    if (accessoriesToRemove.length > 0) {
+      this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, accessoriesToRemove);
+      this.log.info('Removing accessories:', accessoriesToRemove.map(accessory => accessory.displayName).join(', '));
     }
 
     // Open WebSocket (used to control devices later)
