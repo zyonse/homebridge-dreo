@@ -2,23 +2,38 @@ import axios from 'axios';
 import MD5 from 'crypto-js/md5';
 import ReconnectingWebSocket from 'reconnecting-websocket';
 import WebSocket from 'ws';
+import type { Logger } from 'homebridge';
 
 // User agent string for API requests
-const ua = 'dreo/2.8.1 (iPhone; iOS 17.6.1; Scale/3.00)';
+const ua = 'dreo/2.8.1 (iPhone; iOS 18.0.0; Scale/3.00)';
 
 // Follows same request structure as the mobile app
 export default class DreoAPI {
+  private email: string;
+  private password: string;
+  private access_token: string;
+  private log: Logger;
+  public server: string;
+
+  constructor(log: Logger, email: string, password: string) {
+    this.log = log;
+    this.email = email;
+    this.password = password;
+    this.server = 'us';
+    this.access_token = '';
+  }
+
   // Get authentication token
-  public async authenticate(platform, email, password, server) {
-    let token;
-    await axios.post('https://app-api-'+server+'.dreo-cloud.com/api/oauth/login', {
+  public async authenticate() {
+    let auth;
+    await axios.post('https://app-api-'+this.server+'.dreo-cloud.com/api/oauth/login', {
       'client_id': '7de37c362ee54dcf9c4561812309347a',
       'client_secret': '32dfa0764f25451d99f94e1693498791',
-      'email': email,
+      'email': this.email,
       'encrypt': 'ciphertext',
       'grant_type': 'email-password',
       'himei': 'faede31549d649f58864093158787ec9',
-      'password': MD5(password).toString(),  // MD5 hash is sent instead of actual password
+      'password': MD5(this.password).toString(),  // MD5 hash is sent instead of actual password
       'scope': 'all',
     }, {
       params: {
@@ -36,30 +51,31 @@ export default class DreoAPI {
         const payload = response.data;
         if (payload.data && payload.data.access_token) {
           // Auth success
-          token = payload.data;
+          auth = payload.data;
+          this.access_token = auth.access_token;
         } else {
-          platform.log.error('error retrieving token:', payload.msg);
-          token = undefined;
+          this.log.error('error retrieving token:', payload.msg);
+          auth = undefined;
         }
       })
       .catch((error) => {
-        platform.log.error('error retrieving token:', error);
-        token = undefined;
+        this.log.error('error retrieving token:', error);
+        auth = undefined;
       });
-    return token;
+    return auth;
   }
 
   // Return device list
-  public async getDevices(platform, auth) {
+  public async getDevices() {
     let devices;
-    await axios.get('https://app-api-'+auth.server+'.dreo-cloud.com/api/v2/user-device/device/list', {
+    await axios.get('https://app-api-'+this.server+'.dreo-cloud.com/api/v2/user-device/device/list', {
       params: {
         'pageSize': 1000,
         'currentPage': 1,
         'timestamp': Date.now(),
       },
       headers: {
-        'authorization': 'Bearer ' + auth.access_token,
+        'authorization': 'Bearer ' + this.access_token,
         'ua': ua,
         'lang': 'en',
         'accept-encoding': 'gzip',
@@ -71,22 +87,22 @@ export default class DreoAPI {
         devices = response.data.data.list;
       })
       .catch((error) => {
-        platform.log.error('error retrieving device list:', error);
+        this.log.error('error retrieving device list:', error);
         devices = undefined;
       });
     return devices;
   }
 
   // Used to initialize power state, speed values on boot
-  public async getState(platform, sn, auth) {
+  public async getState(sn) {
     let state;
-    await axios.get('https://app-api-'+auth.server+'.dreo-cloud.com/api/user-device/device/state', {
+    await axios.get('https://app-api-'+this.server+'.dreo-cloud.com/api/user-device/device/state', {
       params: {
         'deviceSn': sn,
         'timestamp': Date.now(),
       },
       headers: {
-        'authorization': 'Bearer ' + auth.access_token,
+        'authorization': 'Bearer ' + this.access_token,
         'ua': ua,
         'lang': 'en',
         'accept-encoding': 'gzip',
@@ -97,7 +113,7 @@ export default class DreoAPI {
         state = response.data.data.mixed;
       })
       .catch((error) => {
-        platform.log.error('error retrieving device state:', error);
+        this.log.error('error retrieving device state:', error);
         state = undefined;
       });
     return state;
@@ -105,25 +121,25 @@ export default class DreoAPI {
 
   // Open websocket for outgoing fan commands, websocket will auto-reconnect if a connection error occurs
   // Websocket is also used to monitor incoming state changes from hardware controls
-  public async startWebSocket(platform, auth) {
+  public async startWebSocket() {
     // open websocket
-    const url = 'wss://wsb-'+auth.server+'.dreo-cloud.com/websocket?accessToken='+auth.access_token+'&timestamp='+Date.now();
-    platform.log.debug(url);
+    const url = 'wss://wsb-'+this.server+'.dreo-cloud.com/websocket?accessToken='+this.access_token+'&timestamp='+Date.now();
+    this.log.debug(url);
     const ws = new ReconnectingWebSocket(
       url,
       [],
       {WebSocket: WebSocket});
 
     ws.addEventListener('error', error => {
-      platform.log.debug('WebSocket', error);
+      this.log.debug('WebSocket', error);
     });
 
     ws.addEventListener('open', () => {
-      platform.log.debug('WebSocket Opened');
+      this.log.debug('WebSocket Opened');
     });
 
     ws.addEventListener('close', () => {
-      platform.log.debug('WebSocket Closed');
+      this.log.debug('WebSocket Closed');
     });
 
     // Keep connection open by sending empty packet every 15 seconds
