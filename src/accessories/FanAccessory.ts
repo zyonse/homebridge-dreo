@@ -1,5 +1,5 @@
 import { Service, PlatformAccessory} from 'homebridge';
-import { DreoPlatform } from './platform';
+import { DreoPlatform } from '../platform';
 
 /**
  * Platform Accessory

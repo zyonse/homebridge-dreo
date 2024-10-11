@@ -1,7 +1,7 @@
 import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic } from 'homebridge';
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
-import { FanAccessory } from './FanAccessory';
+import { FanAccessory } from './accessories/FanAccessory';
 import DreoAPI from './DreoAPI';
 
 /**
