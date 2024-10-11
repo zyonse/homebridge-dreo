@@ -12,6 +12,7 @@ import DreoAPI from './DreoAPI';
 export class DreoPlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service = this.api.hap.Service;
   public readonly Characteristic: typeof Characteristic = this.api.hap.Characteristic;
+  public readonly webHelper = new DreoAPI(this);
 
   // This is used to track restored cached accessories
   public readonly accessories: PlatformAccessory[] = [];
@@ -50,23 +51,14 @@ export class DreoPlatform implements DynamicPlatformPlugin {
    * Also remove accessories that are no longer present on the user's account
    */
   async discoverDevices() {
-    const email = this.config.options.email;
-    const password = this.config.options.password;
-
-    // Check for config values
-    if (email === undefined || password === undefined) {
-      this.api.unregisterPlatformAccessories(
-        PLUGIN_NAME,
-        PLATFORM_NAME,
-        this.accessories,
-      );
+    // Validate config values
+    if (this.config.options.email === undefined || this.config.options.password === undefined) {
       this.log.error('error: Invalid email and/or password');
       return;
     }
 
     // Request access token from Dreo server
-    const webHelper = new DreoAPI(this.log, email, password);
-    let auth = await webHelper.authenticate();
+    let auth = await this.webHelper.authenticate();
     // Check if access_token is valid
     if (auth === undefined) {
       this.log.error('Authentication error: Failed to obtain access_token');
@@ -77,8 +69,8 @@ export class DreoPlatform implements DynamicPlatformPlugin {
 
     // Re-authenticate with EU server if european account is detected
     if (auth.region === 'EU') {
-      webHelper.server = 'eu';
-      auth = await webHelper.authenticate();
+      this.webHelper.server = 'eu';
+      auth = await this.webHelper.authenticate();
     } else if (auth.region !== 'NA') {
       this.log.error('error, unknown region');
       this.log.error('Please open a github issue and provide your Country and Region (shown above)');
@@ -86,7 +78,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
     }
 
     // Use access token to retrieve user's devices
-    const dreoDevices = await webHelper.getDevices();
+    const dreoDevices = await this.webHelper.getDevices();
     this.log.debug('\n\nDEVICES:\n', dreoDevices);
     // Check for device list
     if (dreoDevices === undefined) {
@@ -105,7 +97,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
     }
 
     // Open WebSocket (used to control devices later)
-    const ws = await webHelper.startWebSocket();
+    await this.webHelper.startWebSocket();
 
     // Loop over the discovered devices and register each one if it has not already been registered
     for (const device of dreoDevices) {
@@ -120,7 +112,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
       const existingAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
 
       // Get initial device state
-      const state = await webHelper.getState(device.sn);
+      const state = await this.webHelper.getState(device.sn);
       if (state === undefined) {
         this.log.error('error: Failed to retrieve device state');
         return;
@@ -140,7 +132,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
 
         // If windlevel exists, infer that the device is a fan
         if (state.windlevel !== undefined) {
-          new FanAccessory(this, existingAccessory, state, ws);
+          new FanAccessory(this, existingAccessory, state);
         } else {
           this.log.error('error: Unsupported device type ', device.productName);
         }
@@ -164,7 +156,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
         // This is imported from `platformAccessory.ts`
 
         if (state.windlevel !== undefined) {
-          new FanAccessory(this, accessory, state, ws);
+          new FanAccessory(this, accessory, state);
         } else {
           this.log.error('error, unknown device type:', device.productName);
         }

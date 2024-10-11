@@ -2,6 +2,7 @@ import axios from 'axios';
 import MD5 from 'crypto-js/md5';
 import ReconnectingWebSocket from 'reconnecting-websocket';
 import WebSocket from 'ws';
+import type { DreoPlatform } from './platform';
 import type { Logger } from 'homebridge';
 
 // User agent string for API requests
@@ -9,16 +10,17 @@ const ua = 'dreo/2.8.1 (iPhone; iOS 18.0.0; Scale/3.00)';
 
 // Follows same request structure as the mobile app
 export default class DreoAPI {
-  private email: string;
-  private password: string;
+  private readonly email: string;
+  private readonly password: string;
+  private readonly log: Logger;
   private access_token: string;
-  private log: Logger;
+  private ws: WebSocket;
   public server: string;
 
-  constructor(log: Logger, email: string, password: string) {
-    this.log = log;
-    this.email = email;
-    this.password = password;
+  constructor(platform: DreoPlatform) {
+    this.log = platform.log;
+    this.email = platform.config.options.email;
+    this.password = platform.config.options.password;
     this.server = 'us';
     this.access_token = '';
   }
@@ -125,26 +127,39 @@ export default class DreoAPI {
     // open websocket
     const url = 'wss://wsb-'+this.server+'.dreo-cloud.com/websocket?accessToken='+this.access_token+'&timestamp='+Date.now();
     this.log.debug(url);
-    const ws = new ReconnectingWebSocket(
+    this.ws = new ReconnectingWebSocket(
       url,
       [],
       {WebSocket: WebSocket});
 
-    ws.addEventListener('error', error => {
+    this.ws.addEventListener('error', error => {
       this.log.debug('WebSocket', error);
     });
 
-    ws.addEventListener('open', () => {
+    this.ws.addEventListener('open', () => {
       this.log.debug('WebSocket Opened');
     });
 
-    ws.addEventListener('close', () => {
+    this.ws.addEventListener('close', () => {
       this.log.debug('WebSocket Closed');
     });
 
     // Keep connection open by sending empty packet every 15 seconds
-    setInterval(() => ws.send('2'), 15000);
+    setInterval(() => this.ws.send('2'), 15000);
+  }
 
-    return ws;
+  // Allow devices to add event listeners to the WebSocket
+  public addEventListener(event, listener) {
+    this.ws.addEventListener(event, listener);
+  }
+
+  // Send control commands to device (fan speed, power, etc)
+  public control(sn, command) {
+    this.ws.send(JSON.stringify({
+      'deviceSn': sn,
+      'method': 'control',
+      'params': command,
+      'timestamp': Date.now(),
+    }));
   }
 }

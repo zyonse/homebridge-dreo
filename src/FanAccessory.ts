@@ -9,6 +9,7 @@ import { DreoPlatform } from './platform';
 export class FanAccessory {
   private service: Service;
   private temperatureService?: Service;
+  private readonly sn = this.accessory.context.device.sn;
 
   // Cached copy of latest fan states
   private fanState = {
@@ -27,7 +28,6 @@ export class FanAccessory {
     private readonly platform: DreoPlatform,
     private readonly accessory: PlatformAccessory,
     private readonly state,
-    private readonly ws,
   ) {
 
     // Set accessory information
@@ -133,7 +133,7 @@ export class FanAccessory {
     }
 
     // Update values from Dreo app
-    ws.addEventListener('message', message => {
+    platform.webHelper.addEventListener('message', message => {
       const data = JSON.parse(message.data);
 
       // Check if message applies to this device
@@ -213,12 +213,7 @@ export class FanAccessory {
     // Check state to prevent duplicate requests
     if (this.fanState.On !== Boolean(value)) {
       // Send to Dreo server via websocket
-      this.ws.send(JSON.stringify({
-        'devicesn': this.accessory.context.device.sn,
-        'method': 'control',
-        'params': {[this.fanState.PowerCMD]: Boolean(value)},
-        'timestamp': Date.now(),
-      }));
+      this.platform.webHelper.control(this.sn, {[this.fanState.PowerCMD]: Boolean(value)});
     }
   }
 
@@ -234,15 +229,8 @@ export class FanAccessory {
     // Avoid setting speed to 0 (illegal value)
     if (converted !== 0) {
       this.platform.log.debug('Setting fan speed:', converted);
-      this.ws.send(JSON.stringify({
-        'devicesn': this.accessory.context.device.sn,
-        'method': 'control',
-        'params': {
-          [this.fanState.PowerCMD]: true,  // Setting power state to true ensures the fan is actually on
-          'windlevel': converted,
-        },
-        'timestamp': Date.now(),
-      }));
+      // Setting power state to true ensures the fan is actually on
+      this.platform.webHelper.control(this.sn, {[this.fanState.PowerCMD]: true, 'windlevel': converted});
     }
   }
 
@@ -252,12 +240,9 @@ export class FanAccessory {
 
   // Turn oscillation on/off
   async setSwingMode(value) {
-    this.ws.send(JSON.stringify({
-      'devicesn': this.accessory.context.device.sn,
-      'method': 'control',
-      'params': {[this.fanState.SwingCMD]: this.fanState.SwingCMD === 'oscmode' ? Number(value) : Boolean(value)},
-      'timestamp': Date.now(),
-    }));
+    this.platform.webHelper.control(this.sn, {
+      [this.fanState.SwingCMD]: this.fanState.SwingCMD === 'oscmode' ? Number(value) : Boolean(value),
+    });
   }
 
   async getSwingMode() {
@@ -266,12 +251,9 @@ export class FanAccessory {
 
   // Set fan mode
   async setMode(value) {
-    this.ws.send(JSON.stringify({
-      'devicesn': this.accessory.context.device.sn,
-      'method': 'control',
-      'params': {'mode': value === this.platform.Characteristic.TargetFanState.AUTO ? 4 : 1},
-      'timestamp': Date.now(),
-    }));
+    this.platform.webHelper.control(this.sn, {
+      'mode': value === this.platform.Characteristic.TargetFanState.AUTO ? 4 : 1,
+    });
   }
 
   async getMode() {
@@ -280,12 +262,7 @@ export class FanAccessory {
 
   // Turn child lock on/off
   async setLockPhysicalControls(value) {
-    this.ws.send(JSON.stringify({
-      'devicesn': this.accessory.context.device.sn,
-      'method': 'control',
-      'params': {'childlockon': Number(value)},
-      'timestamp': Date.now(),
-    }));
+    this.platform.webHelper.control(this.sn, {'childlockon': Number(value)});
   }
 
   getLockPhysicalControls() {
