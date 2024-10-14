@@ -110,7 +110,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
     // Loop over the discovered devices and register each one if it has not already been registered
     for (const device of dreoDevices) {
       // Print device info:
-      this.log.debug('Control parameters: ', JSON.stringify(device.controlsConf.control, null, 2));
+      this.log.debug('Control config: ', JSON.stringify(device.controlsConf, null, 2));
 
       // Generate a unique id for the accessory this should be generated from
       // something globally unique, but constant, for example, the device serial
