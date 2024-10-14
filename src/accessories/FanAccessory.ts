@@ -1,53 +1,49 @@
 import { Service, PlatformAccessory} from 'homebridge';
 import { DreoPlatform } from '../platform';
+import { BaseAccessory } from './BaseAccessory';
 
 /**
  * Platform Accessory
  * An instance of this class is created for each accessory your platform registers
  * Each accessory may expose multiple services of different service types.
  */
-export class FanAccessory {
+export class FanAccessory extends BaseAccessory {
   private service: Service;
   private temperatureService?: Service;
-  private readonly sn = this.accessory.context.device.sn;
 
   // Cached copy of latest fan states
-  private fanState = {
-    On: false,
-    PowerCMD: 'none',  // Command used to control power (poweron, fanon)
-    Speed: 1,
-    Swing: false,
-    SwingCMD: 'none',  // Command used to control oscillation (shakehorizon, hoscon, oscmode)
-    AutoMode: false,
-    LockPhysicalControls: false,
-    MaxSpeed: 1,
-    Temperature: 0,
+  private currState = {
+    on: false,
+    powerCMD: 'none',  // Command used to control power (poweron, fanon)
+    speed: 1,
+    swing: false,
+    swingCMD: 'none',  // Command used to control oscillation (shakehorizon, hoscon, oscmode)
+    autoMode: false,
+    lockPhysicalControls: false,
+    maxSpeed: 1,
+    temperature: 0,
   };
 
   constructor(
-    private readonly platform: DreoPlatform,
-    private readonly accessory: PlatformAccessory,
+    platform: DreoPlatform,
+    accessory: PlatformAccessory,
     private readonly state,
   ) {
-
-    // Set accessory information
-    this.accessory.getService(this.platform.Service.AccessoryInformation)!
-      .setCharacteristic(this.platform.Characteristic.Manufacturer, accessory.context.device.brand)
-      .setCharacteristic(this.platform.Characteristic.Model, accessory.context.device.model)
-      .setCharacteristic(this.platform.Characteristic.SerialNumber, accessory.context.device.sn);
+    // Call base class constructor
+    super(platform, accessory);
 
     // Initialize fan values
     // Get max fan speed from Dreo API
-    this.fanState.MaxSpeed = accessory.context.device.controlsConf.control.find(params => params.type === 'Speed').items[1].text;
+    this.currState.maxSpeed = accessory.context.device.controlsConf.control.find(params => params.type === 'Speed').items[1].text;
     // Load current state from Dreo API
-    this.fanState.Speed = state.windlevel.state * 100 / this.fanState.MaxSpeed;
+    this.currState.speed = state.windlevel.state * 100 / this.currState.maxSpeed;
     // Some fans use different commands to toggle power, determine which one should be used
     if (state.fanon !== undefined) {
-      this.fanState.PowerCMD = 'fanon';
-      this.fanState.On = state.fanon.state;
+      this.currState.powerCMD = 'fanon';
+      this.currState.on = state.fanon.state;
     } else {
-      this.fanState.PowerCMD = 'poweron';
-      this.fanState.On = state.poweron.state;
+      this.currState.powerCMD = 'poweron';
+      this.currState.on = state.poweron.state;
     }
 
     // Get the Fanv2 service if it exists, otherwise create a new Fanv2 service
@@ -69,7 +65,7 @@ export class FanAccessory {
     this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
       .setProps({
         // Setting minStep defines fan speed steps in HomeKit
-        minStep: 100 / this.fanState.MaxSpeed,
+        minStep: 100 / this.currState.maxSpeed,
       })
       .onSet(this.setRotationSpeed.bind(this))
       .onGet(this.getRotationSpeed.bind(this));
@@ -78,15 +74,15 @@ export class FanAccessory {
     // Some fans use different commands to toggle oscillation, determine which one should be used
     const swing = accessory.context.device.controlsConf.control.find(params => params.type === 'Oscillation');
     if (swing !== undefined) {
-      this.fanState.SwingCMD = swing.cmd;
+      this.currState.swingCMD = swing.cmd;
     }
 
-    if (this.fanState.SwingCMD !== 'none') {
+    if (this.currState.swingCMD !== 'none') {
       // Register handlers for Swing Mode (oscillation)
       this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
         .onSet(this.setSwingMode.bind(this))
         .onGet(this.getSwingMode.bind(this));
-      this.fanState.Swing = state[this.fanState.SwingCMD].state;
+      this.currState.swing = state[this.currState.swingCMD].state;
     }
 
     // Check if mode control is supported
@@ -95,7 +91,7 @@ export class FanAccessory {
       this.service.getCharacteristic(this.platform.Characteristic.TargetFanState)
         .onSet(this.setMode.bind(this))
         .onGet(this.getMode.bind(this));
-      this.fanState.AutoMode = this.convertModeToBoolean(state.mode.state);
+      this.currState.autoMode = this.convertModeToBoolean(state.mode.state);
     }
 
     // Check if child lock is supported
@@ -104,14 +100,14 @@ export class FanAccessory {
       this.service.getCharacteristic(this.platform.Characteristic.LockPhysicalControls)
         .onSet(this.setLockPhysicalControls.bind(this))
         .onGet(this.getLockPhysicalControls.bind(this));
-      this.fanState.LockPhysicalControls = Boolean(state.childlockon.state);
+      this.currState.lockPhysicalControls = Boolean(state.childlockon.state);
     }
 
     const shouldHideTemperatureSensor = this.platform.config.hideTemperatureSensor || false; // default to false if not defined
 
     // If temperature is defined and we are not hiding the sensor
     if (state.temperature !== undefined && !shouldHideTemperatureSensor) {
-      this.fanState.Temperature = this.correctedTemperature(state.temperature.state);
+      this.currState.temperature = this.correctedTemperature(state.temperature.state);
 
       // Check if the Temperature Sensor service already exists, if not create a new one
       this.temperatureService = this.accessory.getService(this.platform.Service.TemperatureSensor);
@@ -143,58 +139,58 @@ export class FanAccessory {
         if (data.method === 'control-report' || data.method === 'control-reply' || data.method === 'report') {
           switch(Object.keys(data.reported)[0]) {
             case 'poweron':
-              this.fanState.On = data.reported.poweron;
+              this.currState.on = data.reported.poweron;
               this.service.getCharacteristic(this.platform.Characteristic.Active)
-                .updateValue(this.fanState.On);
+                .updateValue(this.currState.on);
               this.platform.log.debug('Fan power:', data.reported.poweron);
               break;
             case 'fanon':
-              this.fanState.On = data.reported.fanon;
+              this.currState.on = data.reported.fanon;
               this.service.getCharacteristic(this.platform.Characteristic.Active)
-                .updateValue(this.fanState.On);
+                .updateValue(this.currState.on);
               this.platform.log.debug('Fan power:', data.reported.fanon);
               break;
             case 'windlevel':
-              this.fanState.Speed = data.reported.windlevel * 100 / this.fanState.MaxSpeed;
+              this.currState.speed = data.reported.windlevel * 100 / this.currState.maxSpeed;
               this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
-                .updateValue(this.fanState.Speed);
+                .updateValue(this.currState.speed);
               this.platform.log.debug('Fan speed:', data.reported.windlevel);
               break;
             case 'shakehorizon':
-              this.fanState.Swing = data.reported.shakehorizon;
+              this.currState.swing = data.reported.shakehorizon;
               this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
-                .updateValue(this.fanState.Swing);
+                .updateValue(this.currState.swing);
               this.platform.log.debug('Oscillation mode:', data.reported.shakehorizon);
               break;
             case 'hoscon':
-              this.fanState.Swing = data.reported.hoscon;
+              this.currState.swing = data.reported.hoscon;
               this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
-                .updateValue(this.fanState.Swing);
+                .updateValue(this.currState.swing);
               this.platform.log.debug('Oscillation mode:', data.reported.hoscon);
               break;
             case 'oscmode':
-              this.fanState.Swing = Boolean(data.reported.oscmode);
+              this.currState.swing = Boolean(data.reported.oscmode);
               this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
-                .updateValue(this.fanState.Swing);
+                .updateValue(this.currState.swing);
               this.platform.log.debug('Oscillation mode:', data.reported.oscmode);
               break;
             case 'mode':
-              this.fanState.AutoMode = this.convertModeToBoolean(data.reported.mode);
+              this.currState.autoMode = this.convertModeToBoolean(data.reported.mode);
               this.service.getCharacteristic(this.platform.Characteristic.TargetFanState)
-                .updateValue(this.fanState.AutoMode);
+                .updateValue(this.currState.autoMode);
               this.platform.log.debug('Fan mode:', data.reported.mode);
               break;
             case 'childlockon':
-              this.fanState.LockPhysicalControls = Boolean(data.reported.childlockon);
+              this.currState.lockPhysicalControls = Boolean(data.reported.childlockon);
               this.service.getCharacteristic(this.platform.Characteristic.LockPhysicalControls)
-                .updateValue(this.fanState.LockPhysicalControls);
+                .updateValue(this.currState.lockPhysicalControls);
               this.platform.log.debug('Child lock:', data.reported.childlockon);
               break;
             case 'temperature':
               if (this.temperatureService !== undefined && !shouldHideTemperatureSensor) {
-                this.fanState.Temperature = this.correctedTemperature(data.reported.temperature);
+                this.currState.temperature = this.correctedTemperature(data.reported.temperature);
                 this.temperatureService.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
-                  .updateValue(this.fanState.Temperature);
+                  .updateValue(this.currState.temperature);
               }
               this.platform.log.debug('Temperature:', data.reported.temperature);
               break;
@@ -210,42 +206,42 @@ export class FanAccessory {
   handleActiveSet(value) {
     this.platform.log.debug('Triggered SET Active:', value);
     // Check state to prevent duplicate requests
-    if (this.fanState.On !== Boolean(value)) {
+    if (this.currState.on !== Boolean(value)) {
       // Send to Dreo server via websocket
-      this.platform.webHelper.control(this.sn, {[this.fanState.PowerCMD]: Boolean(value)});
+      this.platform.webHelper.control(this.sn, {[this.currState.powerCMD]: Boolean(value)});
     }
   }
 
   // Handle requests to get the current value of the "Active" characteristic
   handleActiveGet() {
-    return this.fanState.On;
+    return this.currState.on;
   }
 
   // Handle requests to set the fan speed
   async setRotationSpeed(value) {
     // Rotation speed needs to be scaled from HomeKit's percentage value (Dreo app uses whole numbers, ex. 1-6)
-    const converted = Math.round(value * this.fanState.MaxSpeed / 100);
+    const converted = Math.round(value * this.currState.maxSpeed / 100);
     // Avoid setting speed to 0 (illegal value)
     if (converted !== 0) {
       this.platform.log.debug('Setting fan speed:', converted);
       // Setting power state to true ensures the fan is actually on
-      this.platform.webHelper.control(this.sn, {[this.fanState.PowerCMD]: true, 'windlevel': converted});
+      this.platform.webHelper.control(this.sn, {[this.currState.powerCMD]: true, 'windlevel': converted});
     }
   }
 
   async getRotationSpeed() {
-    return this.fanState.Speed;
+    return this.currState.speed;
   }
 
   // Turn oscillation on/off
   async setSwingMode(value) {
     this.platform.webHelper.control(this.sn, {
-      [this.fanState.SwingCMD]: this.fanState.SwingCMD === 'oscmode' ? Number(value) : Boolean(value),
+      [this.currState.swingCMD]: this.currState.swingCMD === 'oscmode' ? Number(value) : Boolean(value),
     });
   }
 
   async getSwingMode() {
-    return this.fanState.Swing;
+    return this.currState.swing;
   }
 
   // Set fan mode
@@ -256,7 +252,7 @@ export class FanAccessory {
   }
 
   async getMode() {
-    return this.fanState.AutoMode;
+    return this.currState.autoMode;
   }
 
   // Turn child lock on/off
@@ -265,11 +261,11 @@ export class FanAccessory {
   }
 
   getLockPhysicalControls() {
-    return this.fanState.LockPhysicalControls;
+    return this.currState.lockPhysicalControls;
   }
 
   async getTemperature() {
-    return this.fanState.Temperature;
+    return this.currState.temperature;
   }
 
   correctedTemperature(temperatureFromDreo) {
