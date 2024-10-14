@@ -126,7 +126,6 @@ export default class DreoAPI {
   public async startWebSocket() {
     // open websocket
     const url = 'wss://wsb-'+this.server+'.dreo-cloud.com/websocket?accessToken='+this.access_token+'&timestamp='+Date.now();
-    this.log.debug(url);
     this.ws = new ReconnectingWebSocket(
       url,
       [],
