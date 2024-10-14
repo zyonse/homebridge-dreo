@@ -38,7 +38,6 @@ export class FanAccessory {
 
     // Initialize fan values
     // Get max fan speed from Dreo API
-    platform.log.debug('Control parameters: ', accessory.context.device.controlsConf.control);
     this.fanState.MaxSpeed = accessory.context.device.controlsConf.control.find(params => params.type === 'Speed').items[1].text;
     // Load current state from Dreo API
     this.fanState.Speed = state.windlevel.state * 100 / this.fanState.MaxSpeed;
