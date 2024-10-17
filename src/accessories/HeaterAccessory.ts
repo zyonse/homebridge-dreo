@@ -3,23 +3,26 @@ import { DreoPlatform } from '../platform';
 import { BaseAccessory } from './BaseAccessory';
 
 /**
- * Platform Accessory
- * An instance of this class is created for each accessory your platform registers
- * Each accessory may expose multiple services of different service types.
+ * Heater Accessory
  */
 export class HeaterAccessory extends BaseAccessory {
   private service: Service;
 
   // Cached copy of latest device states
   private on: boolean;
-  private mode: string;
-  private heatLevel: number;
-  private oscAngle: number;
+  private mode: string;  // [hotair, eco, coolair]
+  private heatLevel: number;  // 1 - 3
+  private oscAngle: number;  // Oscillation angle: 0 = rotating, 60, 90, 120
   private temperature: number;
   private targetTemperature: number;
-  private tempOffset: number;
-  private tempUnit: number;
+  private tempUnit: number;  // Unit shown on physical disply: 1 = F, 2 = C
   private childLockOn: boolean;
+
+  private modeMap = {
+    hotair: 0,
+    eco: 1,
+    coolair: 2,
+  };
 
   constructor(
     platform: DreoPlatform,
@@ -29,16 +32,11 @@ export class HeaterAccessory extends BaseAccessory {
     // Call base class constructor
     super(platform, accessory);
 
-    // Initialize device values
-    // Get min/max temperature from Dreo API
-
-
     // Update current state in homebridge from Dreo API
-    this.tempOffset = state.tempoffset.state;
     this.temperature = this.convertToCelsius(state.temperature.state);
-    this.targetTemperature = state.ecolevel.state;
+    this.targetTemperature = this.convertToCelsius(state.ecolevel.state);
     this.on = state.poweron.state;
-    this.mode = state.mode.state;
+    this.mode = this.modeMap[state.mode.state];
     this.heatLevel = state.htalevel.state;
     this.oscAngle = state.oscangle.state;
     this.tempUnit = state.tempunit.state;
@@ -61,13 +59,13 @@ export class HeaterAccessory extends BaseAccessory {
       .onGet(this.getCurrentTemperature.bind(this));
 
     // Register handlers for Heating Threshold Temperature
-    const tempLimits = accessory.context.device.controlsConf.schedule.modes.find(params => params.value === 'eco').controls[0];
+    const ecoRange = accessory.context.device.controlsConf.schedule.modes.find(params => params.value === 'eco').controls[0];
     this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature)
-      .onSet(this.setHeatingThresholdTemperature)
-      .onGet(this.getHeatingThresholdTemperature)
+      .onSet(this.setHeatingThresholdTemperature.bind(this))
+      .onGet(this.getHeatingThresholdTemperature.bind(this))
       .setProps({
-        minValue: tempLimits.startValue,
-        maxValue: tempLimits.endValue,
+        minValue: this.convertToCelsius(ecoRange.startValue),
+        maxValue: this.convertToCelsius(ecoRange.endValue),
       });
 
     // Check if child lock is supported
@@ -96,7 +94,7 @@ export class HeaterAccessory extends BaseAccessory {
               this.platform.log.debug('Heater power:', data.reported.poweron);
               break;
             case 'mode':
-              this.mode = data.reported.mode;
+              this.mode = this.modeMap[data.reported.mode];
               this.service.getCharacteristic(this.platform.Characteristic.TargetFanState)
                 .updateValue(this.mode);
               this.platform.log.debug('Fan mode:', data.reported.mode);

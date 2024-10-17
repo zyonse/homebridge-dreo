@@ -178,6 +178,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
         case 'DR-HSH':
         case 'WH':
           // Heater
+          //accessory.category = this.api.hap.Categories.AIR_HEATER;
           new HeaterAccessory(this, accessory, state);
           break;
         case 'DR-HAC':
