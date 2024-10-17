@@ -172,18 +172,20 @@ export class DreoPlatform implements DynamicPlatformPlugin {
         case 'DR-HCF':
         case 'DR-HAP':
           // Tower Fan, Air Circulator, Ceiling Fan, Air Purifier
+          accessory.category = this.api.hap.Categories.FAN;
           new FanAccessory(this, accessory, state);
           break;
 
         case 'DR-HSH':
         case 'WH':
           // Heater
-          //accessory.category = this.api.hap.Categories.AIR_HEATER;
+          accessory.category = this.api.hap.Categories.AIR_HEATER;
           new HeaterAccessory(this, accessory, state);
           break;
         case 'DR-HAC':
           // Air Conditioner
           // new CoolerAccessory(this, accessory, state);
+          this.log.info('Air Conditioner not yet supported');
           modelPrefix = undefined;
           break;
 

@@ -2,7 +2,7 @@ import { PlatformAccessory } from 'homebridge';
 import { DreoPlatform } from '../platform';
 
 export abstract class BaseAccessory {
-  protected readonly sn = this.accessory.context.sn;
+  protected readonly sn = this.accessory.context.device.sn;
 
   constructor(
     protected readonly platform: DreoPlatform,

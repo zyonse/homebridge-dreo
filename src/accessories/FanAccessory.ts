@@ -137,66 +137,68 @@ export class FanAccessory extends BaseAccessory {
 
         // Check if we need to update fan state in homekit
         if (data.method === 'control-report' || data.method === 'control-reply' || data.method === 'report') {
-          switch(Object.keys(data.reported)[0]) {
-            case 'poweron':
-              this.currState.on = data.reported.poweron;
-              this.service.getCharacteristic(this.platform.Characteristic.Active)
-                .updateValue(this.currState.on);
-              this.platform.log.debug('Fan power:', data.reported.poweron);
-              break;
-            case 'fanon':
-              this.currState.on = data.reported.fanon;
-              this.service.getCharacteristic(this.platform.Characteristic.Active)
-                .updateValue(this.currState.on);
-              this.platform.log.debug('Fan power:', data.reported.fanon);
-              break;
-            case 'windlevel':
-              this.currState.speed = data.reported.windlevel * 100 / this.currState.maxSpeed;
-              this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
-                .updateValue(this.currState.speed);
-              this.platform.log.debug('Fan speed:', data.reported.windlevel);
-              break;
-            case 'shakehorizon':
-              this.currState.swing = data.reported.shakehorizon;
-              this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
-                .updateValue(this.currState.swing);
-              this.platform.log.debug('Oscillation mode:', data.reported.shakehorizon);
-              break;
-            case 'hoscon':
-              this.currState.swing = data.reported.hoscon;
-              this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
-                .updateValue(this.currState.swing);
-              this.platform.log.debug('Oscillation mode:', data.reported.hoscon);
-              break;
-            case 'oscmode':
-              this.currState.swing = Boolean(data.reported.oscmode);
-              this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
-                .updateValue(this.currState.swing);
-              this.platform.log.debug('Oscillation mode:', data.reported.oscmode);
-              break;
-            case 'mode':
-              this.currState.autoMode = this.convertModeToBoolean(data.reported.mode);
-              this.service.getCharacteristic(this.platform.Characteristic.TargetFanState)
-                .updateValue(this.currState.autoMode);
-              this.platform.log.debug('Fan mode:', data.reported.mode);
-              break;
-            case 'childlockon':
-              this.currState.lockPhysicalControls = Boolean(data.reported.childlockon);
-              this.service.getCharacteristic(this.platform.Characteristic.LockPhysicalControls)
-                .updateValue(this.currState.lockPhysicalControls);
-              this.platform.log.debug('Child lock:', data.reported.childlockon);
-              break;
-            case 'temperature':
-              if (this.temperatureService !== undefined && !shouldHideTemperatureSensor) {
-                this.currState.temperature = this.correctedTemperature(data.reported.temperature);
-                this.temperatureService.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
-                  .updateValue(this.currState.temperature);
-              }
-              this.platform.log.debug('Temperature:', data.reported.temperature);
-              break;
-            default:
-              platform.log.debug('Unknown command received:', Object.keys(data.reported)[0]);
-          }
+          Object.keys(data.reported).forEach(key => {
+            switch(key) {
+              case 'poweron':
+                this.currState.on = data.reported.poweron;
+                this.service.getCharacteristic(this.platform.Characteristic.Active)
+                  .updateValue(this.currState.on);
+                this.platform.log.debug('Fan power:', data.reported.poweron);
+                break;
+              case 'fanon':
+                this.currState.on = data.reported.fanon;
+                this.service.getCharacteristic(this.platform.Characteristic.Active)
+                  .updateValue(this.currState.on);
+                this.platform.log.debug('Fan power:', data.reported.fanon);
+                break;
+              case 'windlevel':
+                this.currState.speed = data.reported.windlevel * 100 / this.currState.maxSpeed;
+                this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
+                  .updateValue(this.currState.speed);
+                this.platform.log.debug('Fan speed:', data.reported.windlevel);
+                break;
+              case 'shakehorizon':
+                this.currState.swing = data.reported.shakehorizon;
+                this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
+                  .updateValue(this.currState.swing);
+                this.platform.log.debug('Oscillation mode:', data.reported.shakehorizon);
+                break;
+              case 'hoscon':
+                this.currState.swing = data.reported.hoscon;
+                this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
+                  .updateValue(this.currState.swing);
+                this.platform.log.debug('Oscillation mode:', data.reported.hoscon);
+                break;
+              case 'oscmode':
+                this.currState.swing = Boolean(data.reported.oscmode);
+                this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
+                  .updateValue(this.currState.swing);
+                this.platform.log.debug('Oscillation mode:', data.reported.oscmode);
+                break;
+              case 'mode':
+                this.currState.autoMode = this.convertModeToBoolean(data.reported.mode);
+                this.service.getCharacteristic(this.platform.Characteristic.TargetFanState)
+                  .updateValue(this.currState.autoMode);
+                this.platform.log.debug('Fan mode:', data.reported.mode);
+                break;
+              case 'childlockon':
+                this.currState.lockPhysicalControls = Boolean(data.reported.childlockon);
+                this.service.getCharacteristic(this.platform.Characteristic.LockPhysicalControls)
+                  .updateValue(this.currState.lockPhysicalControls);
+                this.platform.log.debug('Child lock:', data.reported.childlockon);
+                break;
+              case 'temperature':
+                if (this.temperatureService !== undefined && !shouldHideTemperatureSensor) {
+                  this.currState.temperature = this.correctedTemperature(data.reported.temperature);
+                  this.temperatureService.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
+                    .updateValue(this.currState.temperature);
+                }
+                this.platform.log.debug('Temperature:', data.reported.temperature);
+                break;
+              default:
+                platform.log.debug('Unknown command received:', Object.keys(data.reported)[0]);
+            }
+          });
         }
       }
     });
