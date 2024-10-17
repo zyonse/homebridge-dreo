@@ -2,6 +2,7 @@ import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, 
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { FanAccessory } from './accessories/FanAccessory';
+import { HeaterAccessory } from './accessories/HeaterAccessory';
 import DreoAPI from './DreoAPI';
 
 /**
@@ -161,7 +162,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
       ];
 
       // Find the matching prefix
-      const modelPrefix = SUPPORTED_MODEL_PREFIXES.find(prefix => device.model.startsWith(prefix));
+      let modelPrefix = SUPPORTED_MODEL_PREFIXES.find(prefix => device.model.startsWith(prefix));
 
       // Determine device type based on the matched prefix
       switch (modelPrefix) {
@@ -177,24 +178,26 @@ export class DreoPlatform implements DynamicPlatformPlugin {
         case 'DR-HSH':
         case 'WH':
           // Heater
-          //new HeaterAccessory(this, accessory, state);
+          new HeaterAccessory(this, accessory, state);
           break;
         case 'DR-HAC':
           // Air Conditioner
           // new CoolerAccessory(this, accessory, state);
+          modelPrefix = undefined;
           break;
 
         case 'DR-HHM':
           // Humidifier
           this.log.info('Humidifier not yet supported');
+          modelPrefix = undefined;  // Unassign this so accessory isn't registered below
           break;
 
         default:
           this.log.error('Error, unknown device type:', device.productName);
       }
 
-      if (!existingAccessory) {
-        // Link the accessory to the platform
+      if (!existingAccessory && modelPrefix) {
+        // Link accessory to the platform if model is supported
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
       }
     }

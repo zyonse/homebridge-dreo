@@ -58,8 +58,8 @@ export class FanAccessory extends BaseAccessory {
     // See https://developers.homebridge.io/#/service/Fanv2
     // Register handlers for the Active Characteristic
     this.service.getCharacteristic(this.platform.Characteristic.Active)
-      .onSet(this.handleActiveSet.bind(this))
-      .onGet(this.handleActiveGet.bind(this));
+      .onSet(this.setActive.bind(this))
+      .onGet(this.getActive.bind(this));
 
     // Register handlers for the RotationSpeed Characteristic
     this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
@@ -203,7 +203,7 @@ export class FanAccessory extends BaseAccessory {
   }
 
   // Handle requests to set the "Active" characteristic
-  handleActiveSet(value) {
+  setActive(value) {
     this.platform.log.debug('Triggered SET Active:', value);
     // Check state to prevent duplicate requests
     if (this.currState.on !== Boolean(value)) {
@@ -213,7 +213,7 @@ export class FanAccessory extends BaseAccessory {
   }
 
   // Handle requests to get the current value of the "Active" characteristic
-  handleActiveGet() {
+  getActive() {
     return this.currState.on;
   }
 

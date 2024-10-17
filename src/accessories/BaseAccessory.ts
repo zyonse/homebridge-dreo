@@ -16,6 +16,6 @@ export abstract class BaseAccessory {
   }
 
   // Abstract methods that derived classes must implement
-  abstract handleActiveSet(value: boolean): void;
-  abstract handleActiveGet(): boolean;
+  abstract setActive(value: boolean): void;
+  abstract getActive(): boolean;
 }
