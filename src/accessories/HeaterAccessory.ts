@@ -15,15 +15,9 @@ export class HeaterAccessory extends BaseAccessory {
   private oscAngle: number;  // Oscillation angle: 0 = rotating, 60, 90, 120
   private temperature: number;
   private targetTemperature: number;
-  private heatActive: number;  // Heating element state {0: inactive, 1: idle, 2: heating}
+  private currState: number;  // Heater state in HomeKit {0: inactive, 1: idle, 2: heating, 3: cooling}
   private tempUnit: number;  // Unit shown on physical disply: {1: F, 2: C}
   private childLockOn: boolean;
-
-  private modeMap = {
-    hotair: 0,
-    eco: 1,
-    coolair: 2,
-  };
 
   constructor(
     platform: DreoPlatform,
@@ -37,12 +31,16 @@ export class HeaterAccessory extends BaseAccessory {
     this.temperature = this.convertToCelsius(state.temperature.state);
     this.targetTemperature = this.convertToCelsius(state.ecolevel.state);
     this.on = state.poweron.state;
-    this.mode = this.modeMap[state.mode.state];
+    this.mode = state.mode.state;
     this.heatLevel = state.htalevel.state;
     this.oscAngle = state.oscangle.state;
-    this.heatActive = state.ptcon.state;
     this.tempUnit = state.tempunit.state;
     this.childLockOn = state.childlockon.state;
+    if (this.mode !== 'coolair') {
+      this.currState = state.ptcon.state + this.on;
+    } else {
+      this.currState = 3;
+    }
 
     // Get the HeaterCooler service if it exists, otherwise create a new HeaterCooler service
     this.service = this.accessory.getService(this.platform.Service.HeaterCooler) ||
@@ -63,7 +61,12 @@ export class HeaterAccessory extends BaseAccessory {
     // Register handlers for Target Heater-Cooler State
     this.service.getCharacteristic(this.platform.Characteristic.TargetHeaterCoolerState)
       .onSet(this.setTargetHeaterCoolerState.bind(this))
-      .onGet(this.getTargetHeaterCoolerState.bind(this));
+      .onGet(this.getTargetHeaterCoolerState.bind(this))
+      .setProps({
+        minValue: 1,
+        maxValue: 1,
+        validValues: [1],
+      });
 
     // Register handlers for Current Temperature characteristic
     this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
@@ -101,12 +104,26 @@ export class HeaterAccessory extends BaseAccessory {
                 this.service.getCharacteristic(this.platform.Characteristic.Active)
                   .updateValue(this.on);
                 this.platform.log.debug('Heater power:', data.reported.poweron);
+                // We also need to update Heater-Cooler State
+                if (this.mode !== 'coolair') {
+                  this.currState = data.reported.ptcon + this.on;
+                } else {
+                  this.currState = 3;
+                }
+                this.service.getCharacteristic(this.platform.Characteristic.CurrentHeaterCoolerState)
+                  .updateValue(this.currState);
                 break;
               case 'mode':
-                this.mode = this.modeMap[data.reported.mode];
-                this.service.getCharacteristic(this.platform.Characteristic.TargetFanState)
-                  .updateValue(this.mode);
-                this.platform.log.debug('Fan mode:', data.reported.mode);
+                this.mode = data.reported.mode;
+                this.platform.log.debug('Heater mode:', data.reported.mode);
+                // Update Heater-Cooler State
+                if (this.mode !== 'coolair') {
+                  this.currState = data.reported.ptcon + this.on;
+                } else {
+                  this.currState = 3;
+                }
+                this.service.getCharacteristic(this.platform.Characteristic.CurrentHeaterCoolerState)
+                  .updateValue(this.currState);
                 break;
               case 'childlockon':
                 this.childLockOn = data.reported.childlockon;
@@ -118,17 +135,23 @@ export class HeaterAccessory extends BaseAccessory {
                 this.temperature = this.convertToCelsius(data.reported.temperature);
                 this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
                   .updateValue(this.temperature);
-                this.platform.log.debug('Temperature:', data.reported.temperature);
+                this.platform.log.debug('Heater temperature:', data.reported.temperature);
+                break;
+              case 'ecolevel':
+                this.targetTemperature = this.convertToCelsius(data.reported.ecolevel);
+                this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature)
+                  .updateValue(this.targetTemperature);
+                this.platform.log.debug('Heater target temperature:', data.reported.ecolevel);
                 break;
               case 'ptcon':
                 if (this.mode !== 'coolair') {
-                  this.heatActive = data.reported.ptcon + this.on;
+                  this.currState = data.reported.ptcon + this.on;
                 } else {
-                  this.heatActive = 3;
+                  this.currState = 3;
                 }
-                this.platform.log.debug('Heating active:', data.reported.ptcon);
                 this.service.getCharacteristic(this.platform.Characteristic.CurrentHeaterCoolerState)
-                  .updateValue(this.heatActive);
+                  .updateValue(this.currState);
+                this.platform.log.debug('Heating active:', this.currState);
                 break;
               default:
                 this.platform.log.debug('Unknown command received:', key);
@@ -156,16 +179,17 @@ export class HeaterAccessory extends BaseAccessory {
 
   // Handle requests for Current Heater-Cooler State
   getCurrentHeaterCoolerState() {
-    return this.heatActive;
+    return this.currState;
   }
 
-  // Handle requests for Target Heater-Cooler State
-  setTargetHeaterCoolerState(value) {
+  // Handle requests for Target Heater-Cooler State (we're only using the heating property so this is hardcoded to 1)
+  // More details: https://developers.homebridge.io/#/characteristic/TargetHeaterCoolerState
+  setTargetHeaterCoolerState() {
     return;
   }
 
   getTargetHeaterCoolerState() {
-    return this.mode;
+    return 1;
   }
 
   // Handle requests for Current Temperature
