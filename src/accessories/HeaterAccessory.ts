@@ -18,6 +18,7 @@ export class HeaterAccessory extends BaseAccessory {
   private currState: number;  // Heater state in HomeKit {0: inactive, 1: idle, 2: heating, 3: cooling}
   private tempUnit: number;  // Unit shown on physical disply: {1: F, 2: C}
   private childLockOn: boolean;
+  private ptcon: boolean;  // Heating active
 
   constructor(
     platform: DreoPlatform,
@@ -36,10 +37,12 @@ export class HeaterAccessory extends BaseAccessory {
     this.oscAngle = state.oscangle.state;
     this.tempUnit = state.tempunit.state;
     this.childLockOn = state.childlockon.state;
+    this.ptcon = state.ptcon.state;
+    // Similar logic to updateHeaterState()
     if (this.mode !== 'coolair') {
-      this.currState = state.ptcon.state + this.on;
+      this.currState = Number(this.ptcon) + Number(this.on);
     } else {
-      this.currState = 3;
+      this.currState = 0;
     }
 
     // Get the HeaterCooler service if it exists, otherwise create a new HeaterCooler service
@@ -104,26 +107,14 @@ export class HeaterAccessory extends BaseAccessory {
                 this.service.getCharacteristic(this.platform.Characteristic.Active)
                   .updateValue(this.on);
                 this.platform.log.debug('Heater power:', data.reported.poweron);
-                // We also need to update Heater-Cooler State
-                if (this.mode !== 'coolair') {
-                  this.currState = data.reported.ptcon + this.on;
-                } else {
-                  this.currState = 3;
-                }
-                this.service.getCharacteristic(this.platform.Characteristic.CurrentHeaterCoolerState)
-                  .updateValue(this.currState);
+                // Update Heater-Cooler State
+                this.updateHeaterState();
                 break;
               case 'mode':
                 this.mode = data.reported.mode;
                 this.platform.log.debug('Heater mode:', data.reported.mode);
                 // Update Heater-Cooler State
-                if (this.mode !== 'coolair') {
-                  this.currState = data.reported.ptcon + this.on;
-                } else {
-                  this.currState = 3;
-                }
-                this.service.getCharacteristic(this.platform.Characteristic.CurrentHeaterCoolerState)
-                  .updateValue(this.currState);
+                this.updateHeaterState();
                 break;
               case 'childlockon':
                 this.childLockOn = data.reported.childlockon;
@@ -144,13 +135,7 @@ export class HeaterAccessory extends BaseAccessory {
                 this.platform.log.debug('Heater target temperature:', data.reported.ecolevel);
                 break;
               case 'ptcon':
-                if (this.mode !== 'coolair') {
-                  this.currState = data.reported.ptcon + this.on;
-                } else {
-                  this.currState = 3;
-                }
-                this.service.getCharacteristic(this.platform.Characteristic.CurrentHeaterCoolerState)
-                  .updateValue(this.currState);
+                this.updateHeaterState();
                 this.platform.log.debug('Heating active:', this.currState);
                 break;
               default:
@@ -213,6 +198,18 @@ export class HeaterAccessory extends BaseAccessory {
 
   getLockPhysicalControls() {
     return this.childLockOn;
+  }
+
+  // Helper function that sets heater state in HomeKit based on Dreo values.
+  // HomeKit handles heaters differently than the Dreo app so we need to treat this like a state machine
+  updateHeaterState() {
+    if (this.mode !== 'coolair') {
+      this.currState = Number(this.ptcon) + Number(this.on);
+    } else {
+      this.currState = 0;
+    }
+    this.service.getCharacteristic(this.platform.Characteristic.CurrentHeaterCoolerState)
+      .updateValue(this.currState);
   }
 
   convertToCelsius(temperatureFromDreo) {
