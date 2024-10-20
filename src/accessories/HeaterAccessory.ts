@@ -39,10 +39,10 @@ export class HeaterAccessory extends BaseAccessory {
     this.childLockOn = state.childlockon.state;
     this.ptcon = state.ptcon.state;
     // Similar logic to updateHeaterState()
-    if (this.mode !== 'coolair') {
-      this.currState = Number(this.ptcon) + Number(this.on);
+    if (this.mode === 'coolair') {
+      this.currState = 3;
     } else {
-      this.currState = 0;
+      this.currState = Number(this.ptcon) + Number(this.on);
     }
 
     // Get the HeaterCooler service if it exists, otherwise create a new HeaterCooler service
@@ -67,8 +67,8 @@ export class HeaterAccessory extends BaseAccessory {
       .onGet(this.getTargetHeaterCoolerState.bind(this))
       .setProps({
         minValue: 1,
-        maxValue: 1,
-        validValues: [1],
+        maxValue: 2,
+        validValues: [1, 2],
       });
 
     // Register handlers for Current Temperature characteristic
@@ -83,6 +83,16 @@ export class HeaterAccessory extends BaseAccessory {
       .setProps({
         minValue: this.convertToCelsius(ecoRange.startValue),
         maxValue: this.convertToCelsius(ecoRange.endValue),
+      });
+
+    // Register handlers for Cooling Threshold Temperature
+    this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature)
+      .onSet(this.setCoolingThresholdTemperature.bind(this))
+      .onGet(this.getCoolingThresholdTemperature.bind(this))
+      .setProps({
+        minValue: 0,
+        maxValue: 0,
+        validValues: [0],
       });
 
     // Register handlers for Lock Physical Controls
@@ -135,6 +145,7 @@ export class HeaterAccessory extends BaseAccessory {
                 this.platform.log.debug('Heater target temperature:', data.reported.ecolevel);
                 break;
               case 'ptcon':
+                this.ptcon = data.reported.ptcon;
                 this.updateHeaterState();
                 this.platform.log.debug('Heating active:', this.currState);
                 break;
@@ -167,14 +178,23 @@ export class HeaterAccessory extends BaseAccessory {
     return this.currState;
   }
 
-  // Handle requests for Target Heater-Cooler State (we're only using the heating property so this is hardcoded to 1)
+  // Handle requests for Target Heater-Cooler State
   // More details: https://developers.homebridge.io/#/characteristic/TargetHeaterCoolerState
-  setTargetHeaterCoolerState() {
-    return;
+  setTargetHeaterCoolerState(value) {
+    this.platform.log.debug('Triggered SET TargetHeaterCoolerState:', value);
+    if (value === 1) {
+      this.platform.webHelper.control(this.sn, {'mode': 'eco'});
+    } else if (value === 2) {
+      this.platform.webHelper.control(this.sn, {'mode': 'coolair'});
+    }
   }
 
   getTargetHeaterCoolerState() {
-    return 1;
+    if (this.mode === 'coolair') {
+      return 2;
+    } else {
+      return 1;
+    }
   }
 
   // Handle requests for Current Temperature
@@ -191,6 +211,16 @@ export class HeaterAccessory extends BaseAccessory {
     return this.targetTemperature;
   }
 
+  // Handle requests for Cooling Threshold Temperature
+  // We're just using the 'cooling' mode to control fan only mode so the temperature is hardcoded to 0
+  setCoolingThresholdTemperature() {
+    return;
+  }
+
+  getCoolingThresholdTemperature() {
+    return 0;
+  }
+
   // Turn child lock on/off
   setLockPhysicalControls(value) {
     this.platform.webHelper.control(this.sn, {'childlockon': Boolean(value)});
@@ -203,10 +233,10 @@ export class HeaterAccessory extends BaseAccessory {
   // Helper function that sets heater state in HomeKit based on Dreo values.
   // HomeKit handles heaters differently than the Dreo app so we need to treat this like a state machine
   updateHeaterState() {
-    if (this.mode !== 'coolair') {
-      this.currState = Number(this.ptcon) + Number(this.on);
+    if (this.mode === 'coolair') {
+      this.currState = 3;
     } else {
-      this.currState = 0;
+      this.currState = Number(this.ptcon) + Number(this.on);
     }
     this.service.getCharacteristic(this.platform.Characteristic.CurrentHeaterCoolerState)
       .updateValue(this.currState);
