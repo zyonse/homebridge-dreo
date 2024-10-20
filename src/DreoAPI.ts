@@ -19,8 +19,8 @@ export default class DreoAPI {
 
   constructor(platform: DreoPlatform) {
     this.log = platform.log;
-    this.email = platform.config.options.email;
-    this.password = platform.config.options.password;
+    this.email = platform.config.options?.email;
+    this.password = platform.config.options?.password;
     this.server = 'us';
     this.access_token = '';
   }
