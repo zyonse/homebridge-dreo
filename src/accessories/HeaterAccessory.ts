@@ -7,6 +7,7 @@ import { BaseAccessory } from './BaseAccessory';
  */
 export class HeaterAccessory extends BaseAccessory {
   private service: Service;
+  //private lightService: Service;
 
   // Cached copy of latest device states
   private on: boolean;
@@ -19,6 +20,21 @@ export class HeaterAccessory extends BaseAccessory {
   private tempUnit: number;  // Unit shown on physical disply: {1: F, 2: C}
   private childLockOn: boolean;
   private ptcon: boolean;  // Heating active
+
+  // Map of Oscillation commands
+  // Dreo uses 0, 60, 90, 120 for oscillation angle where 0 is rotating
+  private readonly oscMap = {
+    // Rotating
+    0: 0,
+    // Dreo -> HomeKit
+    60: 100,
+    90: 67,
+    120: 33,
+    // HomeKit -> Dreo
+    100: 60,
+    67: 90,
+    33: 120,
+  };
 
   constructor(
     platform: DreoPlatform,
@@ -34,7 +50,7 @@ export class HeaterAccessory extends BaseAccessory {
     this.on = state.poweron.state;
     this.mode = state.mode.state;
     this.heatLevel = state.htalevel.state;
-    this.oscAngle = state.oscangle.state;
+    this.oscAngle = this.oscMap[state.oscangle.state];
     this.tempUnit = state.tempunit.state;
     this.childLockOn = state.childlockon.state;
     this.ptcon = state.ptcon.state;
@@ -48,6 +64,10 @@ export class HeaterAccessory extends BaseAccessory {
     // Get the HeaterCooler service if it exists, otherwise create a new HeaterCooler service
     this.service = this.accessory.getService(this.platform.Service.HeaterCooler) ||
                    this.accessory.addService(this.platform.Service.HeaterCooler);
+
+    // Register Light Service to control static speed heating
+    //this.lightService = this.accessory.getService(this.platform.Service.Lightbulb) ||
+    //                     this.accessory.addService(this.platform.Service.Lightbulb);
 
     // Set the service name, this is what is displayed as the default name on the Home app
     this.service.setCharacteristic(this.platform.Characteristic.Name, accessory.context.device.deviceName);
@@ -100,6 +120,16 @@ export class HeaterAccessory extends BaseAccessory {
       .onSet(this.setLockPhysicalControls.bind(this))
       .onGet(this.getLockPhysicalControls.bind(this));
 
+    // Rotation speed (used to set oscillation angle)
+    this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
+      .onSet(this.setRotationSpeed.bind(this))
+      .onGet(this.getRotationSpeed.bind(this))
+      .setProps({
+        minStep: 100 / 3,
+      });
+
+    // Light service handlers
+
     // Update values from Dreo app
     platform.webHelper.addEventListener('message', message => {
       const data = JSON.parse(message.data);
@@ -148,6 +178,16 @@ export class HeaterAccessory extends BaseAccessory {
                 this.ptcon = data.reported.ptcon;
                 this.updateHeaterState();
                 this.platform.log.debug('Heating active:', this.currState);
+                break;
+              case 'htalevel':
+                this.heatLevel = data.reported.htalevel;
+                this.platform.log.debug('Heater fixed level:', data.reported.htalevel);
+                break;
+              case 'oscangle':
+                this.oscAngle = this.oscMap[data.reported.oscangle];  // Convert to percentage
+                this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
+                  .updateValue(this.oscAngle);
+                this.platform.log.debug('Heater oscillation angle:', data.reported.oscangle);
                 break;
               default:
                 this.platform.log.debug('Unknown command received:', key);
@@ -228,6 +268,15 @@ export class HeaterAccessory extends BaseAccessory {
 
   getLockPhysicalControls() {
     return this.childLockOn;
+  }
+
+  // Handle requests for Rotation Speed
+  setRotationSpeed(value) {
+    this.platform.webHelper.control(this.sn, {'oscangle': this.oscMap[Math.round(value)]});
+  }
+
+  getRotationSpeed() {
+    return this.oscAngle;
   }
 
   // Helper function that sets heater state in HomeKit based on Dreo values.
