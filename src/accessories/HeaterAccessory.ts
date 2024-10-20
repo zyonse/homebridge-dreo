@@ -7,13 +7,13 @@ import { BaseAccessory } from './BaseAccessory';
  */
 export class HeaterAccessory extends BaseAccessory {
   private service: Service;
-  //private lightService: Service;
 
   // Cached copy of latest device states
   private on: boolean;
   private mode: string;  // [hotair, eco, coolair]
   private heatLevel: number;  // [1, 2, 3]
   private oscAngle: number;  // Oscillation angle: 0 = rotating, 60, 90, 120
+  private swing: boolean;  // Oscillation on/off
   private temperature: number;
   private targetTemperature: number;
   private currState: number;  // Heater state in HomeKit {0: inactive, 1: idle, 2: heating, 3: cooling}
@@ -23,17 +23,16 @@ export class HeaterAccessory extends BaseAccessory {
 
   // Map of Oscillation commands
   // Dreo uses 0, 60, 90, 120 for oscillation angle where 0 is rotating
+  // If we get an oscillation angle of 0 from HomeKit, we'll set oscOn to true
   private readonly oscMap = {
-    // Rotating
-    0: 0,
     // Dreo -> HomeKit
     60: 100,
-    90: 67,
-    120: 33,
+    90: 50,
+    120: 0,
     // HomeKit -> Dreo
     100: 60,
-    67: 90,
-    33: 120,
+    50: 90,
+    0: 120,
   };
 
   constructor(
@@ -50,10 +49,19 @@ export class HeaterAccessory extends BaseAccessory {
     this.on = state.poweron.state;
     this.mode = state.mode.state;
     this.heatLevel = state.htalevel.state;
-    this.oscAngle = this.oscMap[state.oscangle.state];
     this.tempUnit = state.tempunit.state === 1;
     this.childLockOn = state.childlockon.state;
     this.ptcon = state.ptcon.state;
+
+    // Determine oscillation state
+    if (state.oscangle.state === 0) {
+      this.swing = true;
+      this.oscAngle = 100;
+    } else {
+      this.swing = false;
+      this.oscAngle = this.oscMap[state.oscangle.state];
+    }
+
     // Similar logic to updateHeaterState()
     if (this.mode === 'coolair') {
       this.currState = 3;
@@ -64,10 +72,6 @@ export class HeaterAccessory extends BaseAccessory {
     // Get the HeaterCooler service if it exists, otherwise create a new HeaterCooler service
     this.service = this.accessory.getService(this.platform.Service.HeaterCooler) ||
                    this.accessory.addService(this.platform.Service.HeaterCooler);
-
-    // Register Light Service to control static speed heating
-    //this.lightService = this.accessory.getService(this.platform.Service.Lightbulb) ||
-    //                     this.accessory.addService(this.platform.Service.Lightbulb);
 
     // Set the service name, this is what is displayed as the default name on the Home app
     this.service.setCharacteristic(this.platform.Characteristic.Name, accessory.context.device.deviceName);
@@ -125,7 +129,7 @@ export class HeaterAccessory extends BaseAccessory {
       .onSet(this.setRotationSpeed.bind(this))
       .onGet(this.getRotationSpeed.bind(this))
       .setProps({
-        minStep: 100 / 3,
+        minStep: 50,
       });
 
     // Temperature display units
@@ -133,7 +137,11 @@ export class HeaterAccessory extends BaseAccessory {
       .onSet(this.setTemperatureDisplayUnits.bind(this))
       .onGet(this.getTemperatureDisplayUnits.bind(this));
 
-    // Light service handlers
+    // Swing mode
+    this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
+      .onSet(this.setSwingMode.bind(this))
+      .onGet(this.getSwingMode.bind(this));
+
 
     // Update values from Dreo app
     platform.webHelper.addEventListener('message', message => {
@@ -189,9 +197,16 @@ export class HeaterAccessory extends BaseAccessory {
                 this.platform.log.debug('Heater fixed level:', data.reported.htalevel);
                 break;
               case 'oscangle':
-                this.oscAngle = this.oscMap[data.reported.oscangle];  // Convert to percentage
-                this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
-                  .updateValue(this.oscAngle);
+                if (data.reported.oscangle === 0) {
+                  this.swing = true;
+                } else {
+                  this.oscAngle = this.oscMap[data.reported.oscangle];  // Convert to percentage
+                  this.swing = false;
+                  this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
+                    .updateValue(this.oscAngle);
+                }
+                this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
+                  .updateValue(this.swing);
                 this.platform.log.debug('Heater oscillation angle:', data.reported.oscangle);
                 break;
               case 'tempunit':
@@ -283,7 +298,7 @@ export class HeaterAccessory extends BaseAccessory {
 
   // Handle requests for Rotation Speed
   setRotationSpeed(value) {
-    this.platform.webHelper.control(this.sn, {'oscangle': this.oscMap[Math.round(value)]});
+    this.platform.webHelper.control(this.sn, {'oscangle': this.oscMap[value]});
   }
 
   getRotationSpeed() {
@@ -297,6 +312,19 @@ export class HeaterAccessory extends BaseAccessory {
 
   getTemperatureDisplayUnits() {
     return this.tempUnit;
+  }
+
+  // Handle requests for Swing Mode
+  setSwingMode(value) {
+    if (value === 1) {
+      this.platform.webHelper.control(this.sn, {'oscangle': 0});
+    } else {
+      this.platform.webHelper.control(this.sn, {'oscangle': this.oscMap[this.oscAngle]});
+    }
+  }
+
+  getSwingMode() {
+    return this.swing;
   }
 
   // Helper function that sets heater state in HomeKit based on Dreo values.
