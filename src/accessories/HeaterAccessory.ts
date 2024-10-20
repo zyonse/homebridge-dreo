@@ -17,7 +17,7 @@ export class HeaterAccessory extends BaseAccessory {
   private temperature: number;
   private targetTemperature: number;
   private currState: number;  // Heater state in HomeKit {0: inactive, 1: idle, 2: heating, 3: cooling}
-  private tempUnit: number;  // Unit shown on physical disply: {1: F, 2: C}
+  private tempUnit: boolean;  // Unit shown on physical disply: {0: C, 1: F}
   private childLockOn: boolean;
   private ptcon: boolean;  // Heating active
 
@@ -51,7 +51,7 @@ export class HeaterAccessory extends BaseAccessory {
     this.mode = state.mode.state;
     this.heatLevel = state.htalevel.state;
     this.oscAngle = this.oscMap[state.oscangle.state];
-    this.tempUnit = state.tempunit.state;
+    this.tempUnit = state.tempunit.state === 1;
     this.childLockOn = state.childlockon.state;
     this.ptcon = state.ptcon.state;
     // Similar logic to updateHeaterState()
@@ -128,6 +128,11 @@ export class HeaterAccessory extends BaseAccessory {
         minStep: 100 / 3,
       });
 
+    // Temperature display units
+    this.service.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits)
+      .onSet(this.setTemperatureDisplayUnits.bind(this))
+      .onGet(this.getTemperatureDisplayUnits.bind(this));
+
     // Light service handlers
 
     // Update values from Dreo app
@@ -188,6 +193,12 @@ export class HeaterAccessory extends BaseAccessory {
                 this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
                   .updateValue(this.oscAngle);
                 this.platform.log.debug('Heater oscillation angle:', data.reported.oscangle);
+                break;
+              case 'tempunit':
+                this.tempUnit = data.reported.tempunit === 1;
+                this.service.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits)
+                  .updateValue(this.tempUnit);
+                this.platform.log.debug('Temperature unit:', data.reported.tempunit);
                 break;
               default:
                 this.platform.log.debug('Unknown command received:', key);
@@ -277,6 +288,15 @@ export class HeaterAccessory extends BaseAccessory {
 
   getRotationSpeed() {
     return this.oscAngle;
+  }
+
+  // Handle requests for Temperature Display Units
+  setTemperatureDisplayUnits(value) {
+    this.platform.webHelper.control(this.sn, {'tempunit': value === 1 ? 1 : 2});
+  }
+
+  getTemperatureDisplayUnits() {
+    return this.tempUnit;
   }
 
   // Helper function that sets heater state in HomeKit based on Dreo values.
