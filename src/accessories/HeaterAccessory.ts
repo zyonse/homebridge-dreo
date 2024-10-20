@@ -114,9 +114,9 @@ export class HeaterAccessory extends BaseAccessory {
       .onSet(this.setCoolingThresholdTemperature.bind(this))
       .onGet(this.getCoolingThresholdTemperature.bind(this))
       .setProps({
-        minValue: 0,
-        maxValue: 0,
-        validValues: [0],
+        minValue: 10,
+        maxValue: 10,
+        validValues: [10],
       });
 
     // Register handlers for Lock Physical Controls
@@ -284,7 +284,7 @@ export class HeaterAccessory extends BaseAccessory {
   }
 
   getCoolingThresholdTemperature() {
-    return 0;
+    return 10;
   }
 
   // Turn child lock on/off
