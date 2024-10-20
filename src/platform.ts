@@ -53,7 +53,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
    */
   async discoverDevices() {
     // Validate config values
-    if (this.config.options.email === undefined || this.config.options.password === undefined) {
+    if (!this.config.options || !this.config.options.email || !this.config.options.password) {
       this.log.error('error: Invalid email and/or password');
       return;
     }
