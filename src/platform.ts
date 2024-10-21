@@ -196,7 +196,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
           break;
 
         default:
-          this.log.error('Error, unknown device type:', device.productName);
+          this.log.error('Error, unknown device type:', device.productName, device.model);
       }
 
       if (!existingAccessory && modelPrefix) {

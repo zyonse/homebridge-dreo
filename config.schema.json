@@ -36,19 +36,19 @@
         }
       },
       "hideTemperatureSensor": {
-        "title": "Hide Temperature Sensor",
+        "title": "Hide Fan Temperature Sensor",
         "type": "boolean",
         "default": false,
         "description": "Enable this option to hide the temperature sensor."
       },
       "temperatureOffset": {
-        "title": "Temperature Offset",
+        "title": "Fan Temperature Offset",
         "type": "number",
         "condition": {
           "functionBody": "return model.hideTemperatureSensor === false;"
         },
         "default": 0,
-        "description": "Subtract (or add) a set amount from the temperature reading. (Use negative numbers to subtract.)"
+        "description": "Subtract (or add) a set amount from the temperature reading (use negative numbers to subtract). This setting only applies to fans."
       }
     }
   },

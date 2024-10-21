@@ -89,7 +89,7 @@ export class HeaterAccessory extends BaseAccessory {
     this.service.getCharacteristic(this.platform.Characteristic.TargetHeaterCoolerState)
       .onSet(this.setTargetHeaterCoolerState.bind(this))
       .onGet(this.getTargetHeaterCoolerState.bind(this))
-      .setProps({
+      .setProps({  // Disable auto mode
         minValue: 1,
         maxValue: 2,
         validValues: [1, 2],
@@ -113,7 +113,7 @@ export class HeaterAccessory extends BaseAccessory {
     this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature)
       .onSet(this.setCoolingThresholdTemperature.bind(this))
       .onGet(this.getCoolingThresholdTemperature.bind(this))
-      .setProps({
+      .setProps({  // Only allow single value for cooling mode
         minValue: 10,
         maxValue: 10,
         validValues: [10],
