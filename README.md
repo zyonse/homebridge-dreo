@@ -14,6 +14,11 @@ Homebridge plugin for Dreo brand smart devices. [Dreo Fans on Amazon](https://ww
   <img src="https://github.com/zyonse/homebridge-dreo/assets/28782587/1f1d85e6-5bbf-46b5-be7f-6edf95727327" width=200>
   <img src="https://github.com/zyonse/homebridge-dreo/assets/28782587/d5095dd8-3dbe-4f31-9309-1b37c6f62eeb" width=200>
 </p>
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/81bd06d3-5a40-4516-9cf0-bacbd704e689" width=200>
+  <img src="https://github.com/user-attachments/assets/25488e2a-3ac7-4370-9912-072dae31d7d5" width=200>
+  <img src="https://github.com/user-attachments/assets/17e6350d-ec68-48e8-88da-3bd553dffbf2" width=200>
+</p>
 
 ## Compatability
 
