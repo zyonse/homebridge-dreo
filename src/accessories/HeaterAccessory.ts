@@ -21,9 +21,11 @@ export class HeaterAccessory extends BaseAccessory {
   private childLockOn: boolean;
   private ptcon: boolean;  // Heating active
 
-  // Map of Oscillation commands
-  // Dreo uses 0, 60, 90, 120 for oscillation angle where 0 is rotating
-  // If we get an oscillation angle of 0 from HomeKit, we'll set oscOn to true
+  /**
+  * Map of Oscillation commands to HomeKit percentage values
+  * Dreo uses 0, 60, 90, 120 for oscillation angle where 0 is rotating
+  * If we get an oscillation angle of 0 from Dreo, we'll set oscOn to true
+  */
   private readonly oscMap = {
     // Dreo -> HomeKit
     60: 100,
@@ -34,6 +36,8 @@ export class HeaterAccessory extends BaseAccessory {
     50: 90,
     0: 120,
   };
+
+  minTemp: number;
 
   constructor(
     platform: DreoPlatform,
@@ -86,13 +90,18 @@ export class HeaterAccessory extends BaseAccessory {
       .onGet(this.getCurrentHeaterCoolerState.bind(this));
 
     // Register handlers for Target Heater-Cooler State
+    /**
+    * 0: Auto (Dreo static heat)
+    * 1: Heat (Dreo eco mode)
+    * 2: Cool (Dreo fan only mode)
+    */
     this.service.getCharacteristic(this.platform.Characteristic.TargetHeaterCoolerState)
       .onSet(this.setTargetHeaterCoolerState.bind(this))
       .onGet(this.getTargetHeaterCoolerState.bind(this))
-      .setProps({  // Disable auto mode
-        minValue: 1,
+      .setProps({  // We can disable modes by limiting these values
+        minValue: 0,
         maxValue: 2,
-        validValues: [1, 2],
+        validValues: [0, 1, 2],
       });
 
     // Register handlers for Current Temperature characteristic
@@ -101,12 +110,14 @@ export class HeaterAccessory extends BaseAccessory {
 
     // Register handlers for Heating Threshold Temperature
     const ecoRange = accessory.context.device.controlsConf.schedule.modes.find(params => params.value === 'eco').controls[0];
+    this.minTemp = this.convertToCelsius(ecoRange.startValue);
     this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature)
       .onSet(this.setHeatingThresholdTemperature.bind(this))
       .onGet(this.getHeatingThresholdTemperature.bind(this))
       .setProps({
-        minValue: this.convertToCelsius(ecoRange.startValue),
+        minValue: this.minTemp,
         maxValue: this.convertToCelsius(ecoRange.endValue),
+        minStep: 0.5,  // We need this increment amount to create 3 speed steps for auto mode
       });
 
     // Register handlers for Cooling Threshold Temperature
@@ -114,9 +125,9 @@ export class HeaterAccessory extends BaseAccessory {
       .onSet(this.setCoolingThresholdTemperature.bind(this))
       .onGet(this.getCoolingThresholdTemperature.bind(this))
       .setProps({  // Only allow single value for cooling mode
-        minValue: 10,
-        maxValue: 10,
-        validValues: [10],
+        minValue: this.minTemp + 8,
+        maxValue: this.minTemp + 8,
+        validValues: [this.minTemp + 8],
       });
 
     // Register handlers for Lock Physical Controls
@@ -166,6 +177,8 @@ export class HeaterAccessory extends BaseAccessory {
               case 'mode':
                 this.mode = data.reported.mode;
                 this.platform.log.debug('Heater mode:', data.reported.mode);
+                // Swap to custom thermostat mode if in 'hotair' mode
+                this.updateThermostatTemp();
                 // Update Heater-Cooler State
                 this.updateHeaterState();
                 break;
@@ -194,6 +207,7 @@ export class HeaterAccessory extends BaseAccessory {
                 break;
               case 'htalevel':
                 this.heatLevel = data.reported.htalevel;
+                this.updateThermostatTemp();
                 this.platform.log.debug('Heater fixed level:', data.reported.htalevel);
                 break;
               case 'oscangle':
@@ -252,14 +266,18 @@ export class HeaterAccessory extends BaseAccessory {
       this.platform.webHelper.control(this.sn, {'mode': 'eco'});
     } else if (value === 2) {
       this.platform.webHelper.control(this.sn, {'mode': 'coolair'});
+    } else if (value === 0) {
+      this.platform.webHelper.control(this.sn, {'mode': 'hotair'});
     }
   }
 
   getTargetHeaterCoolerState() {
-    if (this.mode === 'coolair') {
+    if (this.mode === 'eco') {
+      return 1;
+    } else if (this.mode === 'coolair') {
       return 2;
     } else {
-      return 1;
+      return 0;
     }
   }
 
@@ -270,11 +288,26 @@ export class HeaterAccessory extends BaseAccessory {
 
   // Handle requests for Heating Threshold Temperature
   setHeatingThresholdTemperature(value) {
-    this.platform.webHelper.control(this.sn, {'ecolevel': this.convertToFahrenheit(value)});
+    if (this.mode === 'eco') {
+      this.platform.webHelper.control(this.sn, {'ecolevel': this.convertToFahrenheit(value)});
+    } else {
+      /**
+       * Dreo uses a fixed range of 1-3 for heat level
+       * We'll map the bottom 3 degree increments of the fan to these levels
+       * So if the minTemp is 5C, {5: 1, 5.5: 2, 6: 3}
+       */
+      value = ((value - this.minTemp) * 2) + 1;
+      value = Math.min(value, 3);  // Ensure speed is within range
+      this.platform.webHelper.control(this.sn, {'htalevel': value});
+    }
   }
 
   getHeatingThresholdTemperature() {
-    return this.targetTemperature;
+    if (this.mode === 'eco') {
+      return this.targetTemperature;
+    } else {
+      return ((this.heatLevel - 1) / 2) + this.minTemp;
+    }
   }
 
   // Handle requests for Cooling Threshold Temperature
@@ -284,7 +317,7 @@ export class HeaterAccessory extends BaseAccessory {
   }
 
   getCoolingThresholdTemperature() {
-    return 10;
+    return this.minTemp + 8;
   }
 
   // Turn child lock on/off
@@ -327,8 +360,7 @@ export class HeaterAccessory extends BaseAccessory {
     return this.swing;
   }
 
-  // Helper function that sets heater state in HomeKit based on Dreo values.
-  // HomeKit handles heaters differently than the Dreo app so we need to treat this like a state machine
+  // Helper function that determines heater state for HomeKit based on Dreo values
   updateHeaterState() {
     if (this.mode === 'coolair') {
       this.currState = 3;
@@ -337,6 +369,17 @@ export class HeaterAccessory extends BaseAccessory {
     }
     this.service.getCharacteristic(this.platform.Characteristic.CurrentHeaterCoolerState)
       .updateValue(this.currState);
+  }
+
+  updateThermostatTemp() {
+    if (this.mode === 'eco') {
+      this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature)
+        .updateValue(this.targetTemperature);
+    } else if (this.mode === 'hotair') {
+      const dispValue = ((this.heatLevel - 1) / 2) + this.minTemp;
+      this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature)
+        .updateValue(dispValue);
+    }
   }
 
   convertToCelsius(temperatureFromDreo) {

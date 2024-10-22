@@ -51,7 +51,7 @@ Please open an issue if you have another model that works or doesn't work. If yo
 * **Fan Speed:** Fan speed is displayed as a percentage value with steps that are equivalent to those of the Dreo app. (for example, a fan with speeds 1-6 will have steps at 17%, 33%, 50% etc)
 
 * **Oscillate:** Toggles fan oscillation
-* **Temperature Sensor:** Display the temperature sensor detected within your devices (for supported devices, check your devices capabilities)Because the Dreo fan temperature sensors are not entirely accurate, you can also set a specific temperature offset for your devices
+* **Temperature Sensor:** Displays current temperature sensor reading. (for supported devices, check your devices capabilities) Because the Dreo fan temperature sensors are not entirely accurate, you can also set a specific temperature offset for your devices.
 * **Child Lock:** Lock physical fan controls
 
 ### Heaters
@@ -60,6 +60,7 @@ Please open an issue if you have another model that works or doesn't work. If yo
 
 * **Heat Mode:** Controls Dreo 'Eco' mode
 * **Cool Mode:** Controls Dreo 'Fan Only' mode
+* **Auto Mode:** Controls Dreo 'Heat' speeds, represented as an offset from the minimum temperature (for example, a heater with speeds 1-3 and a minimum temp of 41F can be controlled by setting temperature to 41, 42, 43)
 * **Current Temperature:** Displays current temperature sensor reading
 * **Fan Speed:** Controls heater vent angle
 * **Oscillate:** Toggles heater vent oscillation
