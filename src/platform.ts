@@ -1,7 +1,8 @@
 import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic } from 'homebridge';
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
-import { FanAccessory } from './FanAccessory';
+import { FanAccessory } from './accessories/FanAccessory';
+import { HeaterAccessory } from './accessories/HeaterAccessory';
 import DreoAPI from './DreoAPI';
 
 /**
@@ -52,7 +53,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
    */
   async discoverDevices() {
     // Validate config values
-    if (this.config.options.email === undefined || this.config.options.password === undefined) {
+    if (!this.config.options || !this.config.options.email || !this.config.options.password) {
       this.log.error('error: Invalid email and/or password');
       return;
     }
@@ -110,7 +111,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
     // Loop over the discovered devices and register each one if it has not already been registered
     for (const device of dreoDevices) {
       // Print device info:
-      this.log.debug('Control parameters: ', JSON.stringify(device.controlsConf.control, null, 2));
+      this.log.debug('Control config: ', JSON.stringify(device.controlsConf, null, 2));
 
       // Generate a unique id for the accessory this should be generated from
       // something globally unique, but constant, for example, the device serial
@@ -121,6 +122,21 @@ export class DreoPlatform implements DynamicPlatformPlugin {
       // the cached devices we stored in the `configureAccessory` method above
       const existingAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
 
+      let accessory: PlatformAccessory;
+
+      if (existingAccessory) {
+        // The accessory already exists
+        this.log.info('Restoring existing accessory from cache:', device.deviceName);
+        accessory = existingAccessory;
+      } else {
+        // The accessory does not yet exist, so we need to create it
+        this.log.info('Adding new accessory:', device.deviceName);
+        // Create a new accessory
+        accessory = new this.api.platformAccessory(device.deviceName, uuid);
+        // Store a copy of the device object in the `accessory.context`
+        accessory.context.device = device;
+      }
+
       // Get initial device state
       const state = await this.webHelper.getState(device.sn);
       if (state === undefined) {
@@ -129,49 +145,62 @@ export class DreoPlatform implements DynamicPlatformPlugin {
       }
       this.log.debug('Accessory state:', state);
 
-      if (existingAccessory) {
-        // The accessory already exists
-        this.log.info('Restoring existing accessory from cache:', device.deviceName);
+      // Create the accessory handler for new/restored accessory
+      // This is imported from `platformAccessory.ts`
 
-        // If you need to update the accessory.context then you should run `api.updatePlatformAccessories`. eg.:
-        // existingAccessory.context.device = device;
-        // this.api.updatePlatformAccessories([existingAccessory]);
+      // List of supported model prefixes
+      const SUPPORTED_MODEL_PREFIXES = [
+        'DR-HTF',  // Tower Fan
+        'DR-HAF',  // Air Circulator
+        'DR-HPF',  // Air Circulator
+        'DR-HCF',  // Ceiling Fan
+        'DR-HAP',  // Air Purifier
+        'DR-HSH',  // Heater
+        'WH',      // Heater
+        'DR-HAC',  // Air Conditioner
+        'DR-HHM',  // Humidifier
+      ];
 
-        // Create the accessory handler for the restored accessory
-        // This is imported from `platformAccessory.ts`
+      // Find the matching prefix
+      let modelPrefix = SUPPORTED_MODEL_PREFIXES.find(prefix => device.model.startsWith(prefix));
 
-        // If windlevel exists, infer that the device is a fan
-        if (state.windlevel !== undefined) {
-          new FanAccessory(this, existingAccessory, state);
-        } else {
-          this.log.error('error: Unsupported device type ', device.productName);
-        }
-
-        // It is possible to remove platform accessories at any time using `api.unregisterPlatformAccessories`, eg.:
-        // remove platform accessories when no longer present
-        // this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [existingAccessory]);
-        // this.log.info('Removing existing accessory from cache:', existingAccessory.displayName);
-      } else {
-        // The accessory does not yet exist, so we need to create it
-        this.log.info('Adding new accessory:', device.deviceName);
-
-        // Create a new accessory
-        const accessory = new this.api.platformAccessory(device.deviceName, uuid);
-
-        // Store a copy of the device object in the `accessory.context`
-        // The `context` property can be used to store any data about the accessory you may need
-        accessory.context.device = device;
-
-        // Create the accessory handler for the newly create accessory
-        // This is imported from `platformAccessory.ts`
-
-        if (state.windlevel !== undefined) {
+      // Determine device type based on the matched prefix
+      switch (modelPrefix) {
+        case 'DR-HTF':
+        case 'DR-HAF':
+        case 'DR-HPF':
+        case 'DR-HCF':
+        case 'DR-HAP':
+          // Tower Fan, Air Circulator, Ceiling Fan, Air Purifier
+          accessory.category = this.api.hap.Categories.FAN;
           new FanAccessory(this, accessory, state);
-        } else {
-          this.log.error('error, unknown device type:', device.productName);
-        }
+          break;
 
-        // Link the accessory to your platform
+        case 'DR-HSH':
+        case 'WH':
+          // Heater
+          accessory.category = this.api.hap.Categories.AIR_HEATER;
+          new HeaterAccessory(this, accessory, state);
+          break;
+        case 'DR-HAC':
+          // Air Conditioner
+          // new CoolerAccessory(this, accessory, state);
+          this.log.info('Air Conditioner not yet supported');
+          modelPrefix = undefined;
+          break;
+
+        case 'DR-HHM':
+          // Humidifier
+          this.log.info('Humidifier not yet supported');
+          modelPrefix = undefined;  // Unassign this so accessory isn't registered below
+          break;
+
+        default:
+          this.log.error('Error, unknown device type:', device.productName, device.model);
+      }
+
+      if (!existingAccessory && modelPrefix) {
+        // Link accessory to the platform if model is supported
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
       }
     }
