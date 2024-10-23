@@ -38,6 +38,7 @@ export class HeaterAccessory extends BaseAccessory {
   };
 
   minTemp: number;
+  canSetAngle: boolean;
 
   constructor(
     platform: DreoPlatform,
@@ -57,13 +58,22 @@ export class HeaterAccessory extends BaseAccessory {
     this.childLockOn = state.childlockon.state;
     this.ptcon = state.ptcon.state;
 
-    // Determine oscillation state
-    if (state.oscangle.state === 0) {
-      this.swing = true;
-      this.oscAngle = 100;
+    // Determine if fan supports "oscangle" command
+    if (state.oscangle) {
+      // Fan supports setting specific oscillation angles
+      this.canSetAngle = true;
+      if (state.oscangle.state === 0) {
+        this.swing = true;
+        this.oscAngle = 0;
+      } else {
+        this.swing = false;
+        this.oscAngle = this.oscMap[state.oscangle.state];
+      }
     } else {
-      this.swing = false;
-      this.oscAngle = this.oscMap[state.oscangle.state];
+      // Fan only supports on/off oscillation toggle
+      this.canSetAngle = false;
+      this.swing = state.oscon.state;
+      this.oscAngle = 0;
     }
 
     // Similar logic to updateHeaterState()
@@ -136,12 +146,15 @@ export class HeaterAccessory extends BaseAccessory {
       .onGet(this.getLockPhysicalControls.bind(this));
 
     // Rotation speed (used to set oscillation angle)
-    this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
-      .onSet(this.setRotationSpeed.bind(this))
-      .onGet(this.getRotationSpeed.bind(this))
-      .setProps({
-        minStep: 50,
-      });
+    // Only show this if the fan supports setting specific oscillation angles
+    if (this.canSetAngle) {
+      this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
+        .onSet(this.setRotationSpeed.bind(this))
+        .onGet(this.getRotationSpeed.bind(this))
+        .setProps({
+          minStep: 50,
+        });
+    }
 
     // Temperature display units
     this.service.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits)
@@ -222,6 +235,12 @@ export class HeaterAccessory extends BaseAccessory {
                 this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
                   .updateValue(this.swing);
                 this.platform.log.debug('Heater oscillation angle:', data.reported.oscangle);
+                break;
+              case 'oscon':
+                this.swing = data.reported.oscon;
+                this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
+                  .updateValue(this.swing);
+                this.platform.log.debug('Heater oscillation:', data.reported.oscon);
                 break;
               case 'tempunit':
                 this.tempUnit = data.reported.tempunit === 1;
@@ -349,10 +368,16 @@ export class HeaterAccessory extends BaseAccessory {
 
   // Handle requests for Swing Mode
   setSwingMode(value) {
-    if (value === 1) {
-      this.platform.webHelper.control(this.sn, {'oscangle': 0});
+    if (this.canSetAngle) {
+      // If fan supports setting specific angles, we need to set angle to 0 for oscillation mode
+      if (value === 1) {
+        this.platform.webHelper.control(this.sn, {'oscangle': 0});
+      } else {
+        this.platform.webHelper.control(this.sn, {'oscangle': this.oscMap[this.oscAngle]});
+      }
     } else {
-      this.platform.webHelper.control(this.sn, {'oscangle': this.oscMap[this.oscAngle]});
+      // Fan only supports on/off oscillation toggle
+      this.platform.webHelper.control(this.sn, {'oscon': value});
     }
   }
 
