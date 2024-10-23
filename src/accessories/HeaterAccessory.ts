@@ -119,7 +119,11 @@ export class HeaterAccessory extends BaseAccessory {
       .onGet(this.getCurrentTemperature.bind(this));
 
     // Register handlers for Heating Threshold Temperature
-    const ecoRange = accessory.context.device.controlsConf.schedule.modes.find(params => params.value === 'eco').controls[0];
+    let ecoRange = {startValue: 41, endValue: 95};  // Default temperature range
+    // Get temperature range from Dreo control config if available (not sure why this doesn't exist for some devices)
+    if (accessory.context.device.controlsConf.schedule) {
+      ecoRange = accessory.context.device.controlsConf.schedule.modes.find(params => params.value === 'eco').controls[0];
+    }
     this.minTemp = this.convertToCelsius(ecoRange.startValue);
     this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature)
       .onSet(this.setHeatingThresholdTemperature.bind(this))
