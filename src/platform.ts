@@ -80,6 +80,10 @@ export class DreoPlatform implements DynamicPlatformPlugin {
 
     // Use access token to retrieve user's devices
     const dreoDevices = await this.webHelper.getDevices();
+    // Make sure devices were retrieved successfully
+    if (dreoDevices === undefined) {
+      return;
+    }
 
     // Mask sensitive information and print the device list
     const maskedDevices = dreoDevices.map(device => ({
@@ -88,12 +92,6 @@ export class DreoPlatform implements DynamicPlatformPlugin {
       deviceId: '********',
     }));
     this.log.debug('\n\nDevices:\n', maskedDevices);
-
-    // Check for device list
-    if (dreoDevices === undefined) {
-      this.log.error('error: Failed to retrieve device list');
-      return;
-    }
 
     // Create a set of UUIDs for the currently discovered devices
     const discoveredDeviceUUIDs = new Set(dreoDevices.map(device => this.api.hap.uuid.generate(device.sn)));
