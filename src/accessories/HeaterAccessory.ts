@@ -39,6 +39,7 @@ export class HeaterAccessory extends BaseAccessory {
 
   minTemp: number;
   canSetAngle: boolean;
+  canSwing: boolean;
 
   constructor(
     platform: DreoPlatform,
@@ -62,6 +63,7 @@ export class HeaterAccessory extends BaseAccessory {
     if (state.oscangle) {
       // Fan supports setting specific oscillation angles
       this.canSetAngle = true;
+      this.canSwing = true;
       if (state.oscangle.state === 0) {
         this.swing = true;
         this.oscAngle = 0;
@@ -69,10 +71,16 @@ export class HeaterAccessory extends BaseAccessory {
         this.swing = false;
         this.oscAngle = this.oscMap[state.oscangle.state];
       }
+    } else if (state.oscon) {
+      this.canSetAngle = false;
+      this.canSwing = true;
+      this.swing = state.oscon.state;
+      this.oscAngle = 0;
     } else {
       // Fan only supports on/off oscillation toggle
+      this.canSwing = false;
       this.canSetAngle = false;
-      this.swing = state.oscon.state;
+      this.swing = false;
       this.oscAngle = 0;
     }
 
@@ -166,9 +174,11 @@ export class HeaterAccessory extends BaseAccessory {
       .onGet(this.getTemperatureDisplayUnits.bind(this));
 
     // Swing mode
-    this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
-      .onSet(this.setSwingMode.bind(this))
-      .onGet(this.getSwingMode.bind(this));
+    if (this.canSwing) {
+      this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
+          .onSet(this.setSwingMode.bind(this))
+          .onGet(this.getSwingMode.bind(this));
+    }
 
 
     // Update values from Dreo app
