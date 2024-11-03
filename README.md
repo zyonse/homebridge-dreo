@@ -42,6 +42,7 @@ Homebridge plugin for Dreo brand smart devices. [Dreo Fans on Amazon](https://ww
 
 * DR-HSH004S
 * DR-HSH009S
+* ‎DR-HSH017S
 
 Please open an issue if you have another model that works or doesn't work. If you have another device type and can help me test some code out I would definitely be open to adding support.
 
