@@ -40,6 +40,7 @@ export class HeaterAccessory extends BaseAccessory {
   minTemp: number;
   canSwing: boolean;
   canSetAngle: boolean;
+  canSetTempUnit: boolean;
 
   constructor(
     platform: DreoPlatform,
@@ -55,7 +56,6 @@ export class HeaterAccessory extends BaseAccessory {
     this.on = state.poweron.state;
     this.mode = state.mode.state;
     this.heatLevel = state.htalevel.state;
-    this.tempUnit = state.tempunit.state === 1;
     this.childLockOn = state.childlockon.state;
     this.ptcon = state.ptcon.state;
 
@@ -83,6 +83,15 @@ export class HeaterAccessory extends BaseAccessory {
       this.canSetAngle = false;
       this.swing = false;
       this.oscAngle = 0;
+    }
+    // Determine if fan supports setting temperature unit
+    if (state.tempunit) {
+      this.canSetTempUnit = true;
+      // Dreo uses 1 for Fahrenheit and 2 for Celsius, convert to boolean for HomeKit
+      this.tempUnit = state.tempunit.state === 1;
+    } else {
+      this.canSetTempUnit = false;
+      this.tempUnit = false;
     }
 
     // Similar logic to updateHeaterState()
@@ -170,9 +179,11 @@ export class HeaterAccessory extends BaseAccessory {
     }
 
     // Temperature display units
-    this.service.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits)
-      .onSet(this.setTemperatureDisplayUnits.bind(this))
-      .onGet(this.getTemperatureDisplayUnits.bind(this));
+    if (this.canSetTempUnit) {
+      this.service.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits)
+        .onSet(this.setTemperatureDisplayUnits.bind(this))
+        .onGet(this.getTemperatureDisplayUnits.bind(this));
+    }
 
     // Swing mode
     if (this.canSwing) {
