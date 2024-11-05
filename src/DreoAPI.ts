@@ -70,10 +70,8 @@ export default class DreoAPI {
   // Return device list
   public async getDevices() {
     let devices;
-    await axios.get('https://app-api-'+this.server+'.dreo-cloud.com/api/v2/user-device/device/list', {
+    await axios.get('https://app-api-'+this.server+'.dreo-cloud.com/api/app/index/family/room/devices', {
       params: {
-        'pageSize': 1000,
-        'currentPage': 1,
         'timestamp': Date.now(),
       },
       headers: {
