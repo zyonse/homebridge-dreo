@@ -29,12 +29,12 @@ export default class DreoAPI {
   public async authenticate() {
     let auth;
     await axios.post('https://app-api-'+this.server+'.dreo-cloud.com/api/oauth/login', {
-      'client_id': '7de37c362ee54dcf9c4561812309347a',
-      'client_secret': '32dfa0764f25451d99f94e1693498791',
+      'client_id': 'd8a56a73d93b427cad801116dc4d3188',
+      'client_secret': '2ac9b179f7e84be58bb901d6ed8bf374',
       'email': this.email,
       'encrypt': 'ciphertext',
       'grant_type': 'email-password',
-      'himei': 'faede31549d649f58864093158787ec9',
+      'himei': '463299817f794e52a228868167df3f34',
       'password': MD5(this.password).toString(),  // MD5 hash is sent instead of actual password
       'scope': 'all',
     }, {
