@@ -3,6 +3,7 @@ import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { FanAccessory } from './accessories/FanAccessory';
 import { HeaterAccessory } from './accessories/HeaterAccessory';
+import { HumidifierAccessory } from './accessories/HumidifierAccessory';
 import DreoAPI from './DreoAPI';
 
 /**
@@ -90,6 +91,10 @@ export class DreoPlatform implements DynamicPlatformPlugin {
       ...device,
       sn: '********',
       deviceId: '********',
+      familyId: '********',
+      familyName: '********',
+      roomId: '********',
+      roomName: '********',
     }));
     this.log.debug('\n\nDevices:\n', maskedDevices);
 
@@ -189,8 +194,8 @@ export class DreoPlatform implements DynamicPlatformPlugin {
 
         case 'DR-HHM':
           // Humidifier
-          this.log.info('Humidifier not yet supported');
-          modelPrefix = undefined;  // Unassign this so accessory isn't registered below
+          accessory.category = this.api.hap.Categories.AIR_HUMIDIFIER;
+          new HumidifierAccessory(this, accessory, state);
           break;
 
         default:
