@@ -415,7 +415,7 @@ export class HumidifierAccessory extends BaseAccessory {
         break;
       case 'rhsleeplevel':
         this.targetHumSleepLevel = reported.rhsleeplevel ?? this.targetHumSleepLevel;
-        this.platform.log.debug('Humidifier targetHumSleepLevel: %s %s', this.targetHumSleepLevel, typeof parseFloat(String(this.targetHumSleepLevel)));
+        this.platform.log.debug('Humidifier targetHumSleepLevel: %s', this.targetHumSleepLevel);
         if (this.deroMode === 2) {
           const valueToUpdate = Math.max(MIN_HUMIDITY, this.targetHumSleepLevel || DEFAULT_HUMIDITY);
           this.humidifierService
