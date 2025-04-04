@@ -79,13 +79,13 @@ export class HumidifierAccessory extends BaseAccessory {
     this.deroMode = state.mode.state;
     this.suspended = state.suspend.state;
     this.currentHum = state.rh.state;
-    this.fogHot = state.hotfogon.state;
+    this.fogHot = state.hotfogon.state || false;
     this.ledLevel = state.ledlevel.state;
     this.rgbLevel = state.rgblevel.state;
-    this.wrong = state.wrong.state;
-    this.manualFogLevel = state.foglevel.state;
-    this.targetHumAutoLevel = state.rhautolevel.state;
-    this.targetHumSleepLevel = state.rhsleeplevel.state;
+    this.wrong = state.wrong.state || 0;
+    this.manualFogLevel = state.foglevel.state || 0;
+    this.targetHumAutoLevel = state.rhautolevel.state || DEFAULT_HUMIDITY;
+    this.targetHumSleepLevel = state.rhsleeplevel.state || DEFAULT_HUMIDITY;
 
     this.currState = this.on ? (this.suspended ? 1 : 2) : 0;
 
@@ -283,32 +283,38 @@ export class HumidifierAccessory extends BaseAccessory {
 
   // Target humidity can be set in auto and sleep modes
   setTargetHumidity(value: unknown): void {
+    const targetValue = Math.min(MAX_HUMIDITY, Math.max(MIN_HUMIDITY, Number(value)));
     if (this.deroMode === 0) { // manual
       this.platform.log.warn('ERROR: Triggered SET TargetHumidity (Manual): %s', Number(value));
     } else if (this.deroMode === 1) { // auto
-      this.targetHumAutoLevel = Math.min(MAX_HUMIDITY, Math.max(MIN_HUMIDITY, Number(value)));
+      this.targetHumAutoLevel = targetValue;
       this.platform.log.debug('Triggered SET TargetHumidity (Auto): %s', value);
       this.platform.webHelper.control(this.sn, {'rhautolevel': this.targetHumAutoLevel});
     } else if (this.deroMode === 2) { // sleep
-      this.targetHumSleepLevel = Math.min(MAX_HUMIDITY, Math.max(MIN_HUMIDITY, Number(value)));
+      this.targetHumSleepLevel = targetValue;
       this.platform.log.debug('Triggered SET TargetHumidity (Sleep): %s', value);
       this.platform.webHelper.control(this.sn, {'rhsleeplevel': this.targetHumSleepLevel});
     }
   }
 
   getTargetHumidity(): number {
+    let threshold: number;
     switch (this.deroMode) {
       case 1: // auto
-        this.platform.log.debug('Triggered GET TargetHumidity (Auto): %s', this.targetHumAutoLevel);
-        return this.targetHumAutoLevel;
+        threshold = this.targetHumAutoLevel;
+        this.platform.log.debug('Triggered GET TargetHumidity (Auto): %s', threshold);
+        break;
       case 2: // sleep
-        this.platform.log.debug('Triggered GET TargetHumidity (Sleep): %s', this.targetHumSleepLevel);
-        return this.targetHumSleepLevel;
+        threshold = this.targetHumSleepLevel;
+        this.platform.log.debug('Triggered GET TargetHumidity (Sleep): %s', threshold);
+        break;
       default: // manual do not have a target humidity, it has fog level
-        this.platform.log.warn('ERROR: Triggered GET TargetHumidity (Manual): %s', MAX_HUMIDITY);
         // return the threshold for Auto mode as a sensible default when manual is active
-        return this.targetHumAutoLevel || DEFAULT_HUMIDITY;
+        threshold = this.targetHumAutoLevel || DEFAULT_HUMIDITY;
+        this.platform.log.debug('Triggered GET TargetHumidity (Manual - Returning Auto Level): %s', threshold);
+        break;
     }
+    return Math.max(MIN_HUMIDITY, threshold || DEFAULT_HUMIDITY);
   }
 
   // Can only be set in manual mode
@@ -402,16 +408,18 @@ export class HumidifierAccessory extends BaseAccessory {
         this.targetHumAutoLevel = reported.rhautolevel ?? this.targetHumAutoLevel;
         this.platform.log.debug('Humidifier targetHumAutoLevel: %s', this.targetHumAutoLevel);
         if (this.deroMode === 1) {
+          const valueToUpdate = Math.max(MIN_HUMIDITY, this.targetHumAutoLevel || DEFAULT_HUMIDITY);
           this.humidifierService
-          .updateCharacteristic(this.platform.Characteristic.RelativeHumidityHumidifierThreshold, this.targetHumAutoLevel || DEFAULT_HUMIDITY);
+          .updateCharacteristic(this.platform.Characteristic.RelativeHumidityHumidifierThreshold, valueToUpdate);
         }
         break;
       case 'rhsleeplevel':
         this.targetHumSleepLevel = reported.rhsleeplevel ?? this.targetHumSleepLevel;
         this.platform.log.debug('Humidifier targetHumSleepLevel: %s %s', this.targetHumSleepLevel, typeof parseFloat(String(this.targetHumSleepLevel)));
         if (this.deroMode === 2) {
+          const valueToUpdate = Math.max(MIN_HUMIDITY, this.targetHumSleepLevel || DEFAULT_HUMIDITY);
           this.humidifierService
-          .updateCharacteristic(this.platform.Characteristic.RelativeHumidityHumidifierThreshold, this.targetHumSleepLevel || DEFAULT_HUMIDITY);
+          .updateCharacteristic(this.platform.Characteristic.RelativeHumidityHumidifierThreshold, valueToUpdate);
         }
         break;
       case 'wrong':
