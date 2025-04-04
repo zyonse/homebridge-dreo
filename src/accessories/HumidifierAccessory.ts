@@ -16,6 +16,7 @@ interface DreoStateReport {
   rgblevel?: string;      // RGB display level 0-2 [off, low, high]
   muteon?: boolean;       // Beep on/off
   wrong?: number;         // Error code 0-1 [0: no error, 1: no water]
+  worktime?: number;      // Work time in minutes after last cleaning
 }
 
 interface DreoMessage {
@@ -38,9 +39,9 @@ interface DreoState {
   wrong: {state: number};
 }
 
-const MAX_HUMIDITY = 60; // Maximum humidity level for HomeKit. TODO 90 causes issues with some HomeKit UI.
-const MIN_HUMIDITY = 30; // Minimum humidity level for HomeKit.
-const DEFAULT_HUMIDITY = 45; // Default humidity level for HomeKit if not specified.
+const MAX_HUMIDITY = 90.0; // Maximum humidity level for HomeKit.
+const MIN_HUMIDITY = 30.0; // Minimum humidity level for HomeKit.
+const DEFAULT_HUMIDITY = 45.0; // Default humidity level for HomeKit if not specified.
 
 export class HumidifierAccessory extends BaseAccessory {
   private readonly humidifierService: Service;
@@ -305,7 +306,8 @@ export class HumidifierAccessory extends BaseAccessory {
         return this.targetHumSleepLevel;
       default: // manual do not have a target humidity, it has fog level
         this.platform.log.warn('ERROR: Triggered GET TargetHumidity (Manual): %s', MAX_HUMIDITY);
-        return MAX_HUMIDITY;
+        // return the threshold for Auto mode as a sensible default when manual is active
+        return this.targetHumAutoLevel || DEFAULT_HUMIDITY;
     }
   }
 
@@ -399,14 +401,18 @@ export class HumidifierAccessory extends BaseAccessory {
       case 'rhautolevel':
         this.targetHumAutoLevel = reported.rhautolevel ?? this.targetHumAutoLevel;
         this.platform.log.debug('Humidifier targetHumAutoLevel: %s', this.targetHumAutoLevel);
-        this.humidifierService
-        .updateCharacteristic(this.platform.Characteristic.RelativeHumidityHumidifierThreshold, this.targetHumAutoLevel || DEFAULT_HUMIDITY);
+        if (this.deroMode === 1) {
+          this.humidifierService
+          .updateCharacteristic(this.platform.Characteristic.RelativeHumidityHumidifierThreshold, this.targetHumAutoLevel || DEFAULT_HUMIDITY);
+        }
         break;
       case 'rhsleeplevel':
         this.targetHumSleepLevel = reported.rhsleeplevel ?? this.targetHumSleepLevel;
-        this.platform.log.debug('Humidifier targetHumSleepLevel: %s', this.targetHumSleepLevel);
-        this.humidifierService
-        .updateCharacteristic(this.platform.Characteristic.RelativeHumidityHumidifierThreshold, this.targetHumSleepLevel || DEFAULT_HUMIDITY);
+        this.platform.log.debug('Humidifier targetHumSleepLevel: %s %s', this.targetHumSleepLevel, typeof parseFloat(String(this.targetHumSleepLevel)));
+        if (this.deroMode === 2) {
+          this.humidifierService
+          .updateCharacteristic(this.platform.Characteristic.RelativeHumidityHumidifierThreshold, this.targetHumSleepLevel || DEFAULT_HUMIDITY);
+        }
         break;
       case 'wrong':
         this.wrong = reported.wrong ?? this.wrong;
