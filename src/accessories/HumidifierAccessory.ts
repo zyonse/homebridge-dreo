@@ -39,9 +39,10 @@ interface DreoState {
   wrong: {state: number};
 }
 
-const MAX_HUMIDITY = 90.0; // Maximum humidity level for HomeKit.
-const MIN_HUMIDITY = 30.0; // Minimum humidity level for HomeKit.
-const DEFAULT_HUMIDITY = 45.0; // Default humidity level for HomeKit if not specified.
+// Use integer values for HomeKit humidity thresholds
+const MAX_HUMIDITY = 90; // Maximum humidity level for HomeKit.
+const MIN_HUMIDITY = 30; // Minimum humidity level for HomeKit.
+const DEFAULT_HUMIDITY = 45; // Default humidity level for HomeKit if not specified.
 
 export class HumidifierAccessory extends BaseAccessory {
   private readonly humidifierService: Service;
@@ -75,17 +76,17 @@ export class HumidifierAccessory extends BaseAccessory {
     super(platform, accessory);
 
     // Update current state in homebridge from Dreo API
-    this.on = state.poweron.state;
-    this.deroMode = state.mode.state;
-    this.suspended = state.suspend.state;
-    this.currentHum = state.rh.state;
-    this.fogHot = state.hotfogon.state || false;
-    this.ledLevel = state.ledlevel.state;
-    this.rgbLevel = state.rgblevel.state;
-    this.wrong = state.wrong.state || 0;
-    this.manualFogLevel = state.foglevel.state || 0;
-    this.targetHumAutoLevel = state.rhautolevel.state || DEFAULT_HUMIDITY;
-    this.targetHumSleepLevel = state.rhsleeplevel.state || DEFAULT_HUMIDITY;
+    this.on = state.poweron?.state ?? false;
+    this.deroMode = state.mode?.state ?? 0;
+    this.suspended = state.suspend?.state ?? false;
+    this.currentHum = state.rh?.state ?? 0;
+    this.fogHot = state.hotfogon?.state ?? false;
+    this.ledLevel = state.ledlevel?.state ?? 0;
+    this.rgbLevel = state.rgblevel?.state ?? '0';
+    this.wrong = state.wrong?.state ?? 0;
+    this.manualFogLevel = state.foglevel?.state ?? 0;
+    this.targetHumAutoLevel = state.rhautolevel?.state ?? DEFAULT_HUMIDITY;
+    this.targetHumSleepLevel = state.rhsleeplevel?.state ?? DEFAULT_HUMIDITY;
 
     this.currState = this.on ? (this.suspended ? 1 : 2) : 0;
 
@@ -281,9 +282,9 @@ export class HumidifierAccessory extends BaseAccessory {
     return this.currentHum;
   }
 
-  // Target humidity can be set in auto and sleep modes
   setTargetHumidity(value: unknown): void {
-    const targetValue = Math.min(MAX_HUMIDITY, Math.max(MIN_HUMIDITY, Number(value)));
+    // Ensure integer value for HomeKit
+    const targetValue = Math.max(MIN_HUMIDITY, Math.min(MAX_HUMIDITY, Math.round(Number(value))));
     if (this.deroMode === 0) { // manual
       this.platform.log.warn('ERROR: Triggered SET TargetHumidity (Manual): %s', Number(value));
     } else if (this.deroMode === 1) { // auto
@@ -314,7 +315,8 @@ export class HumidifierAccessory extends BaseAccessory {
         this.platform.log.debug('Triggered GET TargetHumidity (Manual - Returning Auto Level): %s', threshold);
         break;
     }
-    return Math.max(MIN_HUMIDITY, threshold || DEFAULT_HUMIDITY);
+    // Always return integer for HomeKit
+    return Math.max(MIN_HUMIDITY, Math.min(MAX_HUMIDITY, Math.round(threshold || DEFAULT_HUMIDITY)));
   }
 
   // Can only be set in manual mode
@@ -342,7 +344,7 @@ export class HumidifierAccessory extends BaseAccessory {
 
   private updateCurrentHumidifierState() {
     // Update HomeKit current humidifier state based on power and suspend states
-    this.currState = this.on ? this.suspended ? 1 : 2 : 0;
+    this.currState = this.on ? (this.suspended ? 1 : 2) : 0;
     this.platform.log.debug('Current Humidifier State: %s', this.currState);
     this.humidifierService.updateCharacteristic(this.platform.Characteristic.CurrentHumidifierDehumidifierState, this.currState);
     this.sleepSwitchService.updateCharacteristic(this.platform.Characteristic.On, this.getSleepMode());
@@ -401,14 +403,17 @@ export class HumidifierAccessory extends BaseAccessory {
       case 'foglevel':
         this.manualFogLevel = reported.foglevel ?? this.manualFogLevel;
         this.platform.log.debug('Humidifier manualFogLevel: %s', this.manualFogLevel);
-        // Fog level can change even when not in manual mode. So no need to change mode to manual.
         this.humidifierService.updateCharacteristic(this.platform.Characteristic.RotationSpeed, this.manualFogLevel);
+        if (this.manualFogLevel === 0) {
+          this.on = false;
+          this.humidifierService.updateCharacteristic(this.platform.Characteristic.Active, false);
+        }
         break;
       case 'rhautolevel':
         this.targetHumAutoLevel = reported.rhautolevel ?? this.targetHumAutoLevel;
         this.platform.log.debug('Humidifier targetHumAutoLevel: %s', this.targetHumAutoLevel);
         if (this.deroMode === 1) {
-          const valueToUpdate = Math.max(MIN_HUMIDITY, this.targetHumAutoLevel || DEFAULT_HUMIDITY);
+          const valueToUpdate = Math.max(MIN_HUMIDITY, Math.min(MAX_HUMIDITY, Math.round(this.targetHumAutoLevel || DEFAULT_HUMIDITY)));
           this.humidifierService
           .updateCharacteristic(this.platform.Characteristic.RelativeHumidityHumidifierThreshold, valueToUpdate);
         }
@@ -417,7 +422,7 @@ export class HumidifierAccessory extends BaseAccessory {
         this.targetHumSleepLevel = reported.rhsleeplevel ?? this.targetHumSleepLevel;
         this.platform.log.debug('Humidifier targetHumSleepLevel: %s', this.targetHumSleepLevel);
         if (this.deroMode === 2) {
-          const valueToUpdate = Math.max(MIN_HUMIDITY, this.targetHumSleepLevel || DEFAULT_HUMIDITY);
+          const valueToUpdate = Math.max(MIN_HUMIDITY, Math.min(MAX_HUMIDITY, Math.round(this.targetHumSleepLevel || DEFAULT_HUMIDITY)));
           this.humidifierService
           .updateCharacteristic(this.platform.Characteristic.RelativeHumidityHumidifierThreshold, valueToUpdate);
         }
