@@ -37,10 +37,11 @@ export class FanAccessory extends BaseAccessory {
 
     // Initialize fan values
     // Get max fan speed from Dreo API
-    this.currState.maxSpeed =
-      accessory.context.device.controlsConf.control.find(
+    this.currState.maxSpeed = Number(
+      accessory.context.device?.controlsConf?.control?.find(
         (params) => params.type === 'Speed',
-      ).items[1].text;
+      )?.items?.[1]?.text ?? this.getDeviceSpecificMaxSpeed(accessory.context.device.model),
+    );
     // Load current state from Dreo API
     this.currState.speed =
       (state.windlevel.state * 100) / this.currState.maxSpeed;
@@ -86,12 +87,9 @@ export class FanAccessory extends BaseAccessory {
 
     // Check whether fan supports oscillation
     // Some fans use different commands to toggle oscillation, determine which one should be used
-    const swing = accessory.context.device.controlsConf.control.find(
+    this.currState.swingCMD = accessory.context.device?.controlsConf?.control?.find(
       (params) => params.type === 'Oscillation',
-    );
-    if (swing !== undefined) {
-      this.currState.swingCMD = swing.cmd;
-    }
+    )?.cmd ?? 'none';
 
     if (this.currState.swingCMD !== 'none') {
       // Register handlers for Swing Mode (oscillation)
@@ -422,5 +420,18 @@ export class FanAccessory extends BaseAccessory {
 
   getBrightness() {
     return this.currState.brightness;
+  }
+
+  // Get device-specific max speed based on model
+  private getDeviceSpecificMaxSpeed(model: string): number {
+    switch (model) {
+      case 'DR-HPF008S':
+      case 'DR-HPF004S':
+        this.platform.log.debug('Setting %s max speed to 9', model);
+        return 9;
+      default:
+        this.platform.log.debug('Setting %s max speed to default 1', model);
+        return 1;
+    }
   }
 }
