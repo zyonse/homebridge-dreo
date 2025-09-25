@@ -28,7 +28,7 @@ export default class DreoAPI {
   // Get authentication token
   public async authenticate() {
     let auth;
-    await axios.post('https://app-api-'+this.server+'.dreo-cloud.com/api/oauth/login', {
+    await axios.post('https://app-api-'+this.server+'.dreo-tech.com/api/oauth/login', {
       'client_id': 'd8a56a73d93b427cad801116dc4d3188',
       'client_secret': '2ac9b179f7e84be58bb901d6ed8bf374',
       'email': this.email,
@@ -70,7 +70,7 @@ export default class DreoAPI {
   // Return device list
   public async getDevices() {
     let devices;
-    await axios.get('https://app-api-'+this.server+'.dreo-cloud.com/api/app/index/family/room/devices', {
+    await axios.get('https://app-api-'+this.server+'.dreo-tech.com/api/app/index/family/room/devices', {
       params: {
         'timestamp': Date.now(),
       },
@@ -96,7 +96,7 @@ export default class DreoAPI {
   // Used to initialize power state, speed values on boot
   public async getState(sn) {
     let state;
-    await axios.get('https://app-api-'+this.server+'.dreo-cloud.com/api/user-device/device/state', {
+    await axios.get('https://app-api-'+this.server+'.dreo-tech.com/api/user-device/device/state', {
       params: {
         'deviceSn': sn,
         'timestamp': Date.now(),
@@ -123,7 +123,7 @@ export default class DreoAPI {
   // Websocket is also used to monitor incoming state changes from hardware controls
   public async startWebSocket() {
     // open websocket
-    const url = 'wss://wsb-'+this.server+'.dreo-cloud.com/websocket?accessToken='+this.access_token+'&timestamp='+Date.now();
+    const url = 'wss://wsb-'+this.server+'.dreo-tech.com/websocket?accessToken='+this.access_token+'&timestamp='+Date.now();
     this.ws = new ReconnectingWebSocket(
       url,
       [],
