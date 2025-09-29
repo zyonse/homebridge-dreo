@@ -19,6 +19,12 @@ Homebridge plugin for Dreo brand smart devices. [Dreo Fans on Amazon](https://ww
   <img src="https://github.com/user-attachments/assets/25488e2a-3ac7-4370-9912-072dae31d7d5" width=200>
   <img src="https://github.com/user-attachments/assets/17e6350d-ec68-48e8-88da-3bd553dffbf2" width=200>
 </p>
+<p align="center">
+  <img src="https://raw.githubusercontent.com/shifatul-i/homebridge-dreo/main/.github/images/Humidifier.png" width=200>
+  <img src="https://raw.githubusercontent.com/shifatul-i/homebridge-dreo/main/.github/images/Humidifier_Fog_Level.png" width=200>
+  <img src="https://raw.githubusercontent.com/shifatul-i/homebridge-dreo/main/.github/images/Humidifier_Warm_Mist.png" width=200>
+  <img src="https://raw.githubusercontent.com/shifatul-i/homebridge-dreo/main/.github/images/Humidifier_Sleep_Mode.png" width=200>
+</p>
 
 ## Compatability
 
@@ -46,6 +52,9 @@ Homebridge plugin for Dreo brand smart devices. [Dreo Fans on Amazon](https://ww
 * DR-HSH009S
 * ‎DR-HSH017S
 
+#### Humidifiers
+* DR-HM713S
+
 Please open an issue if you have another model that works or doesn't work. If you have another device type and can help me test some code out I would definitely be open to adding support.
 
 ## Supported Features
@@ -70,6 +79,28 @@ Please open an issue if you have another model that works or doesn't work. If yo
 * **Oscillate:** Toggles heater vent oscillation
 * **Child Lock:** Lock physical heater controls
 * **Hardware Display:** Changes temperature unit on physical hardware display
+
+### Humidifiers
+
+#### To see Humidifier "Water Level" and "Fog Level" in HomeKit, you will need to select `Show as Separate Tiles` in HomeKit. An then name the Switches accordingly, i.e. `Sleep Mode` & `Warm Mist`.
+
+<div align="center" style="display: flex; justify-content: center; align-items: center; flex-direction: row;">
+    <img src="https://raw.githubusercontent.com/shifatul-i/homebridge-dreo/main/.github/images/Setup_1_Show_Separate.png" width=200>
+    <img src="https://raw.githubusercontent.com/shifatul-i/homebridge-dreo/main/.github/images/Setup_2_Rename.png" width=200>
+    <img src="https://raw.githubusercontent.com/shifatul-i/homebridge-dreo/main/.github/images/Setup_3_Fog_Level.png" width=200>
+</div>
+
+* **Auto Mode:** Controls Dreo `Manual Mode`, as HomeKit hides Humidity slider in `Auto Mode`. You can adjust `Mist Level`, which reflects the Dero `Manual Mode` in the Dreo app.
+* **Humidity Mode:** Controls Dreo `Auto Mode` & `Sleep Mode` mode. HomeKit do not support `Sleep Mode`, But you can switch between `Sleep Mode` and `Auto Mode` using the 'Sleep' switch in HomeKit. 
+* **Fan Speed:** Controls the `Mist Level` of the humidifier. Humidifier will automatically switch to `Manual Mode` if this is adjusted in HomeKit.
+* **Sleep Mode:** This is a switch that will toggle the humidifier into `Sleep Mode`. 
+  * **Note**: Do not forget to rename this switch as HomeKit will name it as a `Switch` by default.
+* **Warm Mist:** This is a switch turns on the humidifier's `Warm Mist`. 
+  * **Note**: Do not forget to rename this switch as HomeKit will name it as a `Switch` by default.
+
+#### Sensors
+* **Humidity Sensor:** Displays current humidity sensor reading.
+* **Water Level Sensor:** It's a binary sensor. Displays 100% if the Humidifier has any water in the tank. If no water, it will display 0%. Dero humidifiers do not have a water level sensor.
 
 ## Installation
 
