@@ -2,6 +2,14 @@ import { Service, PlatformAccessory } from 'homebridge';
 import { DreoPlatform } from '../platform';
 import { BaseAccessory } from './BaseAccessory';
 
+// Fallback configs for devices where the Dreo API returns empty controlsConf
+const DEVICE_FALLBACK_CONFIGS: Record<string, { maxSpeed: number; swingCmd: string }> = {
+  'DR-HPF004S': { maxSpeed: 9, swingCmd: 'shakehorizon' },
+  'DR-HPF007S': { maxSpeed: 9, swingCmd: 'shakehorizon' },
+  'DR-HPF008S': { maxSpeed: 9, swingCmd: 'shakehorizon' },
+  'DR-HTF024S': { maxSpeed: 9, swingCmd: 'shakehorizon' },
+};
+
 /**
  * Platform Accessory
  * An instance of this class is created for each accessory your platform registers
@@ -36,11 +44,19 @@ export class FanAccessory extends BaseAccessory {
     super(platform, accessory);
 
     // Initialize fan values
-    // Get max fan speed from Dreo API
-    this.currState.maxSpeed =
-      accessory.context.device.controlsConf.control.find(
+    // Get max fan speed from Dreo API, falling back to device config map for newer models
+    // that return empty controlsConf from the API
+    const model = accessory.context.device.model;
+    this.currState.maxSpeed = Number(
+      accessory.context.device?.controlsConf?.control?.find(
         (params) => params.type === 'Speed',
-      ).items[1].text;
+      )?.items?.[1]?.text ??
+      DEVICE_FALLBACK_CONFIGS[model]?.maxSpeed ??
+      4,
+    );
+    if (!accessory.context.device?.controlsConf?.control) {
+      this.platform.log.warn('No controlsConf from API for %s, using fallback config (maxSpeed: %s)', model, this.currState.maxSpeed);
+    }
     // Load current state from Dreo API
     this.currState.speed =
       (state.windlevel.state * 100) / this.currState.maxSpeed;
@@ -84,14 +100,13 @@ export class FanAccessory extends BaseAccessory {
       .onSet(this.setRotationSpeed.bind(this))
       .onGet(this.getRotationSpeed.bind(this));
 
-    // Check whether fan supports oscillation
-    // Some fans use different commands to toggle oscillation, determine which one should be used
-    const swing = accessory.context.device.controlsConf.control.find(
-      (params) => params.type === 'Oscillation',
-    );
-    if (swing !== undefined) {
-      this.currState.swingCMD = swing.cmd;
-    }
+    // Check whether fan supports oscillation, falling back to device config map
+    this.currState.swingCMD =
+      accessory.context.device?.controlsConf?.control?.find(
+        (params) => params.type === 'Oscillation',
+      )?.cmd ??
+      DEVICE_FALLBACK_CONFIGS[model]?.swingCmd ??
+      'none';
 
     if (this.currState.swingCMD !== 'none') {
       // Register handlers for Swing Mode (oscillation)
