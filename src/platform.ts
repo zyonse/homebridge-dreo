@@ -1,10 +1,26 @@
-import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic } from 'homebridge';
+import type {
+  API,
+  Characteristic,
+  DynamicPlatformPlugin,
+  Logger,
+  PlatformAccessory,
+  PlatformConfig,
+  Service,
+  // eslint-disable-next-line indent
+} from 'homebridge' with { 'resolution-mode': 'import' };
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { FanAccessory } from './accessories/FanAccessory';
 import { HeaterAccessory } from './accessories/HeaterAccessory';
 import { HumidifierAccessory } from './accessories/HumidifierAccessory';
+import { AirConditionerAccessory } from './accessories/AirConditionerAccessory';
 import DreoAPI from './DreoAPI';
+
+interface OpenDreoDevice {
+  deviceSn: string;
+  config?: Record<string, unknown>;
+  state?: Record<string, unknown>;
+}
 
 /**
  * HomebridgePlatform
@@ -12,9 +28,9 @@ import DreoAPI from './DreoAPI';
  * parse the user config and discover/register accessories with Homebridge.
  */
 export class DreoPlatform implements DynamicPlatformPlugin {
-  public readonly Service: typeof Service = this.api.hap.Service;
-  public readonly Characteristic: typeof Characteristic = this.api.hap.Characteristic;
-  public readonly webHelper = new DreoAPI(this);
+  public readonly Service: typeof Service;
+  public readonly Characteristic: typeof Characteristic;
+  public readonly webHelper: DreoAPI;
 
   // This is used to track restored cached accessories
   public readonly accessories: PlatformAccessory[] = [];
@@ -24,6 +40,10 @@ export class DreoPlatform implements DynamicPlatformPlugin {
     public readonly config: PlatformConfig,
     public readonly api: API,
   ) {
+    this.Service = this.api.hap.Service;
+    this.Characteristic = this.api.hap.Characteristic;
+    this.webHelper = new DreoAPI(this);
+
     this.log.debug('Finished initializing platform:', this.config.name);
 
     // When this event is fired it means Homebridge has restored all cached accessories from disk.
@@ -111,6 +131,19 @@ export class DreoPlatform implements DynamicPlatformPlugin {
     // Open WebSocket (used to control devices later)
     await this.webHelper.startWebSocket();
 
+    const hasAirConditioner = dreoDevices.some(device => device.model.startsWith('DR-HAC'));
+    let openApiAuthenticated = false;
+    let openDreoDevices: OpenDreoDevice[] = [];
+    if (hasAirConditioner) {
+      const openAuth = await this.webHelper.authenticateOpenAPI();
+      openApiAuthenticated = openAuth !== undefined;
+      if (!openApiAuthenticated) {
+        this.log.error('Open API authentication failed; Dreo air conditioners cannot be registered');
+      } else {
+        openDreoDevices = await this.webHelper.getOpenDevices() || [];
+      }
+    }
+
     // Loop over the discovered devices and register each one if it has not already been registered
     for (const device of dreoDevices) {
       // Print device info:
@@ -140,11 +173,16 @@ export class DreoPlatform implements DynamicPlatformPlugin {
         accessory.context.device = device;
       }
 
+      const isAirConditioner = device.model.startsWith('DR-HAC');
+      const openDevice = openDreoDevices.find(candidate => candidate.deviceSn === device.sn);
+
       // Get initial device state
-      const state = await this.webHelper.getState(device.sn);
+      const state = isAirConditioner && openApiAuthenticated
+        ? openDevice?.state || await this.webHelper.getOpenState(device.sn)
+        : await this.webHelper.getState(device.sn);
       if (state === undefined) {
         this.log.error('error: Failed to retrieve device state');
-        return;
+        continue;
       }
       this.log.debug('Accessory state:', state);
 
@@ -166,6 +204,10 @@ export class DreoPlatform implements DynamicPlatformPlugin {
 
       // Find the matching prefix
       let modelPrefix = SUPPORTED_MODEL_PREFIXES.find(prefix => device.model.startsWith(prefix));
+      const accessoryDevice = openDevice
+        ? {...device, config: openDevice.config}
+        : device;
+      accessory.context.device = accessoryDevice;
 
       // Determine device type based on the matched prefix
       switch (modelPrefix) {
@@ -187,9 +229,13 @@ export class DreoPlatform implements DynamicPlatformPlugin {
           break;
         case 'DR-HAC':
           // Air Conditioner
-          // new CoolerAccessory(this, accessory, state);
-          this.log.info('Air Conditioner not yet supported');
-          modelPrefix = undefined;
+          if (!openApiAuthenticated) {
+            this.log.error('Air Conditioner requires Dreo Open API authentication');
+            modelPrefix = undefined;
+            break;
+          }
+          accessory.category = this.api.hap.Categories.AIR_CONDITIONER;
+          new AirConditionerAccessory(this, accessory, openDevice?.state || state);
           break;
 
         case 'DR-HHM':
@@ -205,6 +251,8 @@ export class DreoPlatform implements DynamicPlatformPlugin {
       if (!existingAccessory && modelPrefix) {
         // Link accessory to the platform if model is supported
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+      } else if (existingAccessory && modelPrefix) {
+        this.api.updatePlatformAccessories([accessory]);
       }
     }
   }

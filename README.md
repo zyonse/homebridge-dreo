@@ -55,6 +55,10 @@ Homebridge plugin for Dreo brand smart devices. [Dreo Fans on Amazon](https://ww
 #### Humidifiers
 * DR-HM713S
 
+#### Air Conditioners
+
+* Portable Air Conditioner 516S (DR-HAC006S)
+
 Please open an issue if you have another model that works or doesn't work. If you have another device type and can help me test some code out I would definitely be open to adding support.
 
 ## Supported Features
@@ -101,6 +105,17 @@ Please open an issue if you have another model that works or doesn't work. If yo
 #### Sensors
 * **Humidity Sensor:** Displays current humidity sensor reading.
 * **Water Level Sensor:** It's a binary sensor. Displays 100% if the Humidifier has any water in the tank. If no water, it will display 0%. Dero humidifiers do not have a water level sensor.
+
+### Air Conditioners
+
+Air conditioners are exposed as three services on one HomeKit accessory because HomeKit does not provide a single native service with Cool, Dry, and Fan Only modes.
+
+* **Cool:** Power, target temperature, fan speed 1-3/Auto, swing, Sleep mode, and Eco mode
+* **Dry:** Power, target humidity, fan speed 1-3/Auto, and swing
+* **Fan Only:** Power, fan speed 1-3/Auto, and swing
+* **Mode selection:** Cool, Dry, and Fan Only are mutually exclusive
+* **Fan speed switches:** Fan 1, Fan 2, Fan 3, and Fan Auto apply to the currently active mode
+* **Display:** Toggles the hardware display illumination
 
 ## Installation
 

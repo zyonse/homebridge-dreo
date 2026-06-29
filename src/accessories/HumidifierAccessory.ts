@@ -1,5 +1,5 @@
 /* eslint-disable */
-import { PlatformAccessory, Service } from 'homebridge';
+import type { PlatformAccessory, Service } from 'homebridge' with { 'resolution-mode': 'import' };
 import { DreoPlatform } from '../platform';
 import { BaseAccessory } from './BaseAccessory';
 

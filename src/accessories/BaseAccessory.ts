@@ -1,4 +1,4 @@
-import { PlatformAccessory } from 'homebridge';
+import type { PlatformAccessory } from 'homebridge' with { 'resolution-mode': 'import' };
 import { DreoPlatform } from '../platform';
 
 interface DreoDevice {
@@ -9,12 +9,14 @@ interface DreoDevice {
 }
 
 export abstract class BaseAccessory {
-  protected readonly sn = this.accessory.context.device.sn;
+  protected readonly sn: string;
 
   constructor(
     protected readonly platform: DreoPlatform,
     protected readonly accessory: PlatformAccessory,
   ) {
+    this.sn = this.accessory.context.device.sn;
+
     // Set accessory information
     accessory.getService(this.platform.Service.AccessoryInformation)!
       .setCharacteristic(this.platform.Characteristic.Manufacturer, accessory.context.device.brand)
