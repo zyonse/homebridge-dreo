@@ -13,8 +13,10 @@ export default class DreoAPI {
   private readonly email: string;
   private readonly password: string;
   private readonly log: Logger;
+  private readonly controlDelayMs = 250;
   private access_token: string;
-  private ws: WebSocket;
+  private ws!: WebSocket;
+  private controlQueue: Promise<void>;
   public server: string;
 
   constructor(platform: DreoPlatform) {
@@ -23,6 +25,7 @@ export default class DreoAPI {
     this.password = platform.config.options?.password;
     this.server = 'us';
     this.access_token = '';
+    this.controlQueue = Promise.resolve();
   }
 
   // Get authentication token
@@ -152,11 +155,32 @@ export default class DreoAPI {
 
   // Send control commands to device (fan speed, power, etc)
   public control(sn, command) {
-    this.ws.send(JSON.stringify({
+    this.controlQueue = this.controlQueue
+      .catch(() => undefined)
+      .then(() => this.sendControl(sn, command));
+
+    return this.controlQueue;
+  }
+
+  private async sendControl(sn, command) {
+    const payload = JSON.stringify({
       'deviceSn': sn,
       'method': 'control',
       'params': command,
       'timestamp': Date.now(),
-    }));
+    });
+
+    try {
+      this.ws.send(payload);
+      this.log.debug('Dreo control queue send:', payload);
+    } catch (error) {
+      this.log.error('error sending control command:', error);
+    }
+
+    await this.delay(this.controlDelayMs);
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
