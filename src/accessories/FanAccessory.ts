@@ -5,6 +5,8 @@ import { BaseAccessory } from './BaseAccessory';
 // Known oscillation state keys, in priority order. Add new keys here if Dreo
 // introduces additional oscillation commands on future devices.
 const OSCILLATION_KEYS = ['shakehorizon', 'hoscon', 'oscmode'] as const;
+const RGB_MAX = 255;
+const DEFAULT_PERCENT_MAX = 100;
 
 // Fallback maxSpeed for devices whose Dreo API returns an incomplete controlsConf
 // (e.g. { template: 'DR-HPF002S' } with no control array). swingCmd is not needed
@@ -31,6 +33,8 @@ export class FanAccessory extends BaseAccessory {
   private service: Service;
   private temperatureService?: Service;
   private lightService?: Service;
+  private rgbLightService?: Service;
+  private readonly ambientBrightnessMax: number;
 
   // Cached copy of latest fan states
   private currState = {
@@ -45,6 +49,10 @@ export class FanAccessory extends BaseAccessory {
     temperature: 0,
     lightOn: false,
     brightness: 100,
+    rgbLightOn: false,
+    rgbBrightness: 100,
+    hue: 0,
+    saturation: 0,
   };
 
   constructor(
@@ -69,6 +77,7 @@ export class FanAccessory extends BaseAccessory {
     if (!accessory.context.device?.controlsConf?.control) {
       this.platform.log.warn('No controlsConf from API for %s, using fallback config (maxSpeed: %s)', model, this.currState.maxSpeed);
     }
+    this.ambientBrightnessMax = this.resolveAmbientBrightnessMax();
     // Load current state from Dreo API
     this.currState.speed =
       (state.windlevel.state * 100) / this.currState.maxSpeed;
@@ -191,8 +200,13 @@ export class FanAccessory extends BaseAccessory {
 
       // Initialize Lightbulb service
       this.lightService =
+        this.accessory.getServiceById(this.platform.Service.Lightbulb, 'main-light') ||
         this.accessory.getService(this.platform.Service.Lightbulb) ||
-        this.accessory.addService(this.platform.Service.Lightbulb);
+        this.accessory.addService(
+          this.platform.Service.Lightbulb,
+          accessory.context.device.deviceName + ' Light',
+          'main-light',
+        );
 
       this.lightService.setCharacteristic(
         this.platform.Characteristic.Name,
@@ -210,13 +224,59 @@ export class FanAccessory extends BaseAccessory {
         .onGet(this.getBrightness.bind(this));
     }
 
+    if (this.hasRgbLightSupport(state)) {
+      this.currState.rgbLightOn = Boolean(state.ambient_switch?.state ?? false);
+      this.currState.rgbBrightness = this.toHomeKitBrightness(
+        Number(state.atmbri?.state ?? this.ambientBrightnessMax),
+      );
+
+      if (state.atmcolor?.state !== undefined) {
+        const hsv = this.rgbToHsv(this.intToRgb(Number(state.atmcolor.state)));
+        this.currState.hue = hsv.hue;
+        this.currState.saturation = hsv.saturation;
+      }
+
+      this.rgbLightService =
+        this.accessory.getServiceById(this.platform.Service.Lightbulb, 'rgb-light') ||
+        this.accessory.addService(
+          this.platform.Service.Lightbulb,
+          accessory.context.device.deviceName + ' RGB Light',
+          'rgb-light',
+        );
+
+      this.rgbLightService.setCharacteristic(
+        this.platform.Characteristic.Name,
+        accessory.context.device.deviceName + ' RGB Light',
+      );
+
+      this.rgbLightService
+        .getCharacteristic(this.platform.Characteristic.On)
+        .onSet(this.setRgbLightOn.bind(this))
+        .onGet(this.getRgbLightOn.bind(this));
+
+      this.rgbLightService
+        .getCharacteristic(this.platform.Characteristic.Brightness)
+        .onSet(this.setRgbBrightness.bind(this))
+        .onGet(this.getRgbBrightness.bind(this));
+
+      this.rgbLightService
+        .getCharacteristic(this.platform.Characteristic.Hue)
+        .onSet(this.setHue.bind(this))
+        .onGet(this.getHue.bind(this));
+
+      this.rgbLightService
+        .getCharacteristic(this.platform.Characteristic.Saturation)
+        .onSet(this.setSaturation.bind(this))
+        .onGet(this.getSaturation.bind(this));
+    }
+
     // Update values from Dreo app
     platform.webHelper.addEventListener('message', (message) => {
       const data = JSON.parse(message.data);
 
       // Check if message applies to this device
       if (data.devicesn === accessory.context.device.sn) {
-        platform.log.debug('Incoming %s', message.data);
+        platform.log.warn('Incoming %s', message.data);
 
         // Check if we need to update fan state in homekit
         if (
@@ -339,6 +399,39 @@ export class FanAccessory extends BaseAccessory {
                   data.reported.brightness,
                 );
                 break;
+      case 'atmon':
+              case 'ambient_switch':
+                this.currState.rgbLightOn = Boolean(data.reported.atmon ?? data.reported.ambient_switch);
+                this.rgbLightService
+                  ?.getCharacteristic(this.platform.Characteristic.On)
+                  .updateValue(this.currState.rgbLightOn);
+                this.platform.log.debug(
+                  'RGB light on:',
+                  data.reported.ambient_switch,
+                );
+                break;
+              case 'atmcolor': {
+                const hsv = this.rgbToHsv(this.intToRgb(Number(data.reported.atmcolor)));
+                this.currState.hue = hsv.hue;
+                this.currState.saturation = hsv.saturation;
+                this.rgbLightService
+                  ?.getCharacteristic(this.platform.Characteristic.Hue)
+                  .updateValue(this.currState.hue);
+                this.rgbLightService
+                  ?.getCharacteristic(this.platform.Characteristic.Saturation)
+                  .updateValue(this.currState.saturation);
+                this.platform.log.debug('RGB color:', data.reported.atmcolor);
+                break;
+              }
+              case 'atmbri':
+                this.currState.rgbBrightness = this.toHomeKitBrightness(
+                  Number(data.reported.atmbri),
+                );
+                this.rgbLightService
+                  ?.getCharacteristic(this.platform.Characteristic.Brightness)
+                  .updateValue(this.currState.rgbBrightness);
+                this.platform.log.debug('RGB brightness:', data.reported.atmbri);
+                break;
               default:
                 platform.log.debug(
                   'Unknown command received:',
@@ -356,9 +449,13 @@ export class FanAccessory extends BaseAccessory {
     this.platform.log.debug('Triggered SET Active:', value);
     // Check state to prevent duplicate requests
     if (this.currState.on !== Boolean(value)) {
+      this.currState.on = Boolean(value);
+      this.service
+        .getCharacteristic(this.platform.Characteristic.Active)
+        .updateValue(this.currState.on);
       // Send to Dreo server via websocket
       this.platform.webHelper.control(this.sn, {
-        [this.currState.powerCMD]: Boolean(value),
+        [this.currState.powerCMD]: this.currState.on,
       });
     }
   }
@@ -375,6 +472,14 @@ export class FanAccessory extends BaseAccessory {
     // Avoid setting speed to 0 (illegal value)
     if (converted !== 0) {
       this.platform.log.debug('Setting fan speed:', converted);
+      this.currState.speed = Number(value);
+      this.currState.on = true;
+      this.service
+        .getCharacteristic(this.platform.Characteristic.RotationSpeed)
+        .updateValue(this.currState.speed);
+      this.service
+        .getCharacteristic(this.platform.Characteristic.Active)
+        .updateValue(this.currState.on);
       // Setting power state to true ensures the fan is actually on
       this.platform.webHelper.control(this.sn, {
         [this.currState.powerCMD]: true,
@@ -389,9 +494,13 @@ export class FanAccessory extends BaseAccessory {
 
   // Turn oscillation on/off
   async setSwingMode(value) {
+    this.currState.swing = Boolean(value);
+    this.service
+      .getCharacteristic(this.platform.Characteristic.SwingMode)
+      .updateValue(this.currState.swing);
     this.platform.webHelper.control(this.sn, {
       [this.currState.swingCMD]:
-        this.currState.swingCMD === 'oscmode' ? Number(value) : Boolean(value),
+        this.currState.swingCMD === 'oscmode' ? Number(value) : this.currState.swing,
     });
   }
 
@@ -401,6 +510,11 @@ export class FanAccessory extends BaseAccessory {
 
   // Set fan mode
   async setMode(value) {
+    this.currState.autoMode =
+      value === this.platform.Characteristic.TargetFanState.AUTO;
+    this.service
+      .getCharacteristic(this.platform.Characteristic.TargetFanState)
+      .updateValue(this.currState.autoMode);
     this.platform.webHelper.control(this.sn, {
       mode: value === this.platform.Characteristic.TargetFanState.AUTO ? 4 : 1,
     });
@@ -412,7 +526,13 @@ export class FanAccessory extends BaseAccessory {
 
   // Turn child lock on/off
   async setLockPhysicalControls(value) {
-    this.platform.webHelper.control(this.sn, { childlockon: Number(value) });
+    this.currState.lockPhysicalControls = Boolean(value);
+    this.service
+      .getCharacteristic(this.platform.Characteristic.LockPhysicalControls)
+      .updateValue(this.currState.lockPhysicalControls);
+    this.platform.webHelper.control(this.sn, {
+      childlockon: Number(this.currState.lockPhysicalControls),
+    });
   }
 
   getLockPhysicalControls() {
@@ -436,7 +556,11 @@ export class FanAccessory extends BaseAccessory {
 
   setLightOn(value: any) {
     this.platform.log.debug('Triggered SET Light On:', value);
-    this.platform.webHelper.control(this.sn, { lighton: Boolean(value) });
+    this.currState.lightOn = Boolean(value);
+    this.lightService
+      ?.getCharacteristic(this.platform.Characteristic.On)
+      .updateValue(this.currState.lightOn);
+    this.platform.webHelper.control(this.sn, { lighton: this.currState.lightOn });
   }
 
   getLightOn() {
@@ -445,10 +569,220 @@ export class FanAccessory extends BaseAccessory {
 
   setBrightness(value) {
     this.platform.log.debug('Triggered SET Brightness:', value);
-    this.platform.webHelper.control(this.sn, { brightness: value });
+    this.currState.brightness = Number(value);
+    this.lightService
+      ?.getCharacteristic(this.platform.Characteristic.Brightness)
+      .updateValue(this.currState.brightness);
+    this.platform.webHelper.control(this.sn, { brightness: this.currState.brightness });
   }
 
   getBrightness() {
     return this.currState.brightness;
+  }
+
+  private hasRgbLightSupport(state): boolean {
+    return state.ambient_switch !== undefined ||
+      state.atmcolor !== undefined ||
+      state.atmbri !== undefined;
+  }
+
+  private resolveAmbientBrightnessMax(): number {
+    const control = this.accessory.context.device?.controlsConf?.control?.find(
+      (params) => params.cmd === 'atmbri',
+    );
+    const candidates = [
+      control?.items?.[1]?.value,
+      control?.items?.[1]?.text,
+      control?.max,
+      control?.range?.[1],
+    ];
+
+    for (const candidate of candidates) {
+      const numeric = Number(candidate);
+      if (Number.isFinite(numeric) && numeric > 0) {
+        return numeric;
+      }
+    }
+
+    return 5;
+  }
+
+  private toHomeKitBrightness(value: number): number {
+    const normalized = (value / this.ambientBrightnessMax) * DEFAULT_PERCENT_MAX;
+    return Math.max(0, Math.min(DEFAULT_PERCENT_MAX, Math.round(normalized)));
+  }
+
+  private toAmbientBrightness(value: number): number {
+    return Math.max(1, Math.min(5, Math.round((value / 100) * 5)));
+  }
+
+  private intToRgb(value: number) {
+    return {
+      red: (value >> 16) & RGB_MAX,
+      green: (value >> 8) & RGB_MAX,
+      blue: value & RGB_MAX,
+    };
+  }
+
+  private rgbToInt(red: number, green: number, blue: number): number {
+    return (red << 16) | (green << 8) | blue;
+  }
+
+  private rgbToHsv(rgb: { red: number; green: number; blue: number }) {
+    const red = rgb.red / RGB_MAX;
+    const green = rgb.green / RGB_MAX;
+    const blue = rgb.blue / RGB_MAX;
+    const max = Math.max(red, green, blue);
+    const min = Math.min(red, green, blue);
+    const delta = max - min;
+    let hue = 0;
+
+    if (delta !== 0) {
+      switch (max) {
+        case red:
+          hue = 60 * (((green - blue) / delta) % 6);
+          break;
+        case green:
+          hue = 60 * (((blue - red) / delta) + 2);
+          break;
+        default:
+          hue = 60 * (((red - green) / delta) + 4);
+          break;
+      }
+    }
+
+    if (hue < 0) {
+      hue += 360;
+    }
+
+    const saturation = max === 0 ? 0 : (delta / max) * DEFAULT_PERCENT_MAX;
+
+    return {
+      hue: Math.round(hue),
+      saturation: Math.round(saturation),
+    };
+  }
+
+  private hsvToRgb(hue: number, saturation: number, brightness: number) {
+    const normalizedSaturation = saturation / DEFAULT_PERCENT_MAX;
+    const normalizedBrightness = brightness / DEFAULT_PERCENT_MAX;
+    const chroma = normalizedBrightness * normalizedSaturation;
+    const huePrime = hue / 60;
+    const intermediate = chroma * (1 - Math.abs((huePrime % 2) - 1));
+    const match = normalizedBrightness - chroma;
+    let red = 0;
+    let green = 0;
+    let blue = 0;
+
+    if (huePrime >= 0 && huePrime < 1) {
+      red = chroma;
+      green = intermediate;
+    } else if (huePrime < 2) {
+      red = intermediate;
+      green = chroma;
+    } else if (huePrime < 3) {
+      green = chroma;
+      blue = intermediate;
+    } else if (huePrime < 4) {
+      green = intermediate;
+      blue = chroma;
+    } else if (huePrime < 5) {
+      red = intermediate;
+      blue = chroma;
+    } else {
+      red = chroma;
+      blue = intermediate;
+    }
+
+    return {
+      red: Math.round((red + match) * RGB_MAX),
+      green: Math.round((green + match) * RGB_MAX),
+      blue: Math.round((blue + match) * RGB_MAX),
+    };
+  }
+
+  private rgbUpdateTimer?: NodeJS.Timeout;
+
+  private scheduleRgbUpdate() {
+    if (this.rgbUpdateTimer) clearTimeout(this.rgbUpdateTimer);
+    this.rgbUpdateTimer = setTimeout(() => this.updateRgbColor(), 500);
+  }
+
+  private updateRgbColor() {
+    const rgb = this.hsvToRgb(
+      this.currState.hue,
+      this.currState.saturation,
+      100,
+    );
+
+    this.platform.webHelper.control(this.sn, {
+      atmcolor: this.rgbToInt(rgb.red, rgb.green, rgb.blue),
+    });
+  }
+
+  private setRgbLightOn(value) {
+    this.platform.log.debug('Triggered SET RGB Light On:', value);
+    this.currState.rgbLightOn = Boolean(value);
+    this.rgbLightService
+      ?.getCharacteristic(this.platform.Characteristic.On)
+      .updateValue(this.currState.rgbLightOn);
+    this.platform.webHelper.control(this.sn, { atmon: this.currState.rgbLightOn });
+  }
+
+  private getRgbLightOn() {
+    return this.currState.rgbLightOn;
+  }
+
+  private setRgbBrightness(value) {
+    this.platform.log.debug('Triggered SET RGB Brightness:', value);
+    this.currState.rgbBrightness = Number(value);
+    this.currState.rgbLightOn = true;
+    this.rgbLightService
+      ?.getCharacteristic(this.platform.Characteristic.Brightness)
+      .updateValue(this.currState.rgbBrightness);
+    this.rgbLightService
+      ?.getCharacteristic(this.platform.Characteristic.On)
+      .updateValue(this.currState.rgbLightOn);
+    this.platform.webHelper.control(this.sn, {
+      atmbri: this.toAmbientBrightness(Number(value)),
+    });
+  }
+
+  private getRgbBrightness() {
+    return this.currState.rgbBrightness;
+  }
+
+  private setHue(value) {
+    this.platform.log.debug('Triggered SET Hue:', value);
+    this.currState.hue = Number(value);
+    this.currState.rgbLightOn = true;
+    this.rgbLightService
+      ?.getCharacteristic(this.platform.Characteristic.Hue)
+      .updateValue(this.currState.hue);
+    this.rgbLightService
+      ?.getCharacteristic(this.platform.Characteristic.On)
+      .updateValue(this.currState.rgbLightOn);
+    this.scheduleRgbUpdate();
+  }
+
+  private getHue() {
+    return this.currState.hue;
+  }
+
+  private setSaturation(value) {
+    this.platform.log.debug('Triggered SET Saturation:', value);
+    this.currState.saturation = Number(value);
+    this.currState.rgbLightOn = true;
+    this.rgbLightService
+      ?.getCharacteristic(this.platform.Characteristic.Saturation)
+      .updateValue(this.currState.saturation);
+    this.rgbLightService
+      ?.getCharacteristic(this.platform.Characteristic.On)
+      .updateValue(this.currState.rgbLightOn);
+    this.scheduleRgbUpdate();
+  }
+
+  private getSaturation() {
+    return this.currState.saturation;
   }
 }

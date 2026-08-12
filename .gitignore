@@ -117,4 +117,4 @@ dist
 .yarn/cache
 .yarn/unplugged
 .yarn/build-state.yml
-.pnp.*
+.pnp.*.DS_Store
