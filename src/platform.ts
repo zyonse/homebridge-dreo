@@ -136,6 +136,10 @@ export class DreoPlatform implements DynamicPlatformPlugin {
         // The accessory already exists
         this.log.info('Restoring existing accessory from cache:', device.deviceName);
         accessory = existingAccessory;
+        // Refresh cloud metadata on every discovery. This keeps capabilities and
+        // service labels current after a device is renamed in the Dreo app.
+        accessory.context.device = device;
+        accessory.displayName = device.deviceName;
       } else {
         // The accessory does not yet exist, so we need to create it
         this.log.info('Adding new accessory:', device.deviceName);
@@ -210,6 +214,8 @@ export class DreoPlatform implements DynamicPlatformPlugin {
       if (!existingAccessory && modelPrefix) {
         // Link accessory to the platform if model is supported
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+      } else if (existingAccessory && modelPrefix) {
+        this.api.updatePlatformAccessories([accessory]);
       }
     }
   }

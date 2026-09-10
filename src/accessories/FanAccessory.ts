@@ -1,14 +1,15 @@
-import { Service, PlatformAccessory } from 'homebridge';
+import { CharacteristicValue, Service, PlatformAccessory } from 'homebridge';
 import { DreoPlatform } from '../platform';
 import { BaseAccessory } from './BaseAccessory';
-
-// Known oscillation state keys, in priority order. Add new keys here if Dreo
-// introduces additional oscillation commands on future devices.
-const OSCILLATION_KEYS = ['shakehorizon', 'hoscon', 'oscmode'] as const;
+import {
+  FAN_MODE_SWITCHES,
+  getModeCommand,
+  getOscillationCommand,
+  getStateValue,
+} from './FanCapabilities';
 
 // Fallback maxSpeed for devices whose Dreo API returns an incomplete controlsConf
-// (e.g. { template: 'DR-HPF002S' } with no control array). swingCmd is not needed
-// here — it is auto-detected from whichever oscillation key is present in device state.
+// (e.g. { template: 'DR-HPF002S' } with no control array).
 //
 // Future enhancement: resolve the template model name returned in controlsConf against
 // the Dreo API to fetch the real maxSpeed, eliminating the need for this map entirely.
@@ -31,6 +32,9 @@ export class FanAccessory extends BaseAccessory {
   private service: Service;
   private temperatureService?: Service;
   private lightService?: Service;
+  private displayAutoOffService?: Service;
+  private panelSoundService?: Service;
+  private readonly modeServices = new Map<number, Service>();
 
   // Cached copy of latest fan states
   private currState = {
@@ -39,12 +43,16 @@ export class FanAccessory extends BaseAccessory {
     speed: 1,
     swing: false,
     swingCMD: 'none', // Command used to control oscillation (shakehorizon, hoscon, oscmode)
+    mode: 1,
+    modeCMD: 'none', // Command used to control mode (windtype, mode)
     autoMode: false,
     lockPhysicalControls: false,
     maxSpeed: 1,
     temperature: 0,
     lightOn: false,
     brightness: 100,
+    ledAlwaysOn: false,
+    panelSound: false,
   };
 
   constructor(
@@ -114,12 +122,10 @@ export class FanAccessory extends BaseAccessory {
 
     // Check whether fan supports oscillation. First try the API controlsConf, then
     // auto-detect from whichever oscillation key is present in the device state.
-    this.currState.swingCMD =
-      accessory.context.device?.controlsConf?.control?.find(
-        (params) => params.type === 'Oscillation',
-      )?.cmd ??
-      OSCILLATION_KEYS.find((key) => key in state) ??
-      'none';
+    this.currState.swingCMD = getOscillationCommand(
+      accessory.context.device,
+      state,
+    ) || 'none';
 
     if (this.currState.swingCMD !== 'none') {
       // Register handlers for Swing Mode (oscillation)
@@ -130,14 +136,21 @@ export class FanAccessory extends BaseAccessory {
       this.currState.swing = Boolean(state[this.currState.swingCMD]?.state ?? false);
     }
 
-    // Check if mode control is supported
-    if (state.mode !== undefined) {
+    // Check if mode control is supported. Newer fans report "windtype"
+    // instead of "mode".
+    const modeCommand = getModeCommand(state);
+    this.currState.modeCMD = modeCommand || 'none';
+    if (modeCommand) {
       // Register handlers for Target Fan State
       this.service
         .getCharacteristic(this.platform.Characteristic.TargetFanState)
         .onSet(this.setMode.bind(this))
         .onGet(this.getMode.bind(this));
-      this.currState.autoMode = this.convertModeToBoolean(state.mode.state);
+      this.currState.mode = Number(getStateValue(state, modeCommand));
+      this.currState.autoMode = this.convertModeToBoolean(this.currState.mode);
+      this.configureModeSwitches();
+    } else {
+      this.removeModeSwitches();
     }
 
     // Check if child lock is supported
@@ -149,6 +162,8 @@ export class FanAccessory extends BaseAccessory {
         .onGet(this.getLockPhysicalControls.bind(this));
       this.currState.lockPhysicalControls = Boolean(state.childlockon.state);
     }
+
+    this.configurePreferenceSwitches(state);
 
     const shouldHideTemperatureSensor =
       this.platform.config.hideTemperatureSensor || false; // default to false if not defined
@@ -279,15 +294,23 @@ export class FanAccessory extends BaseAccessory {
                 );
                 break;
               case 'mode':
-                this.currState.autoMode = this.convertModeToBoolean(
-                  data.reported.mode,
-                );
-                this.service
-                  .getCharacteristic(
-                    this.platform.Characteristic.TargetFanState,
-                  )
-                  .updateValue(this.currState.autoMode);
-                this.platform.log.debug('Fan mode:', data.reported.mode);
+              case 'windtype':
+                this.updateMode(Number(data.reported[key]));
+                this.platform.log.debug('Fan mode:', data.reported[key]);
+                break;
+              case 'ledalwayson':
+                this.currState.ledAlwaysOn = Boolean(data.reported.ledalwayson);
+                this.displayAutoOffService
+                  ?.getCharacteristic(this.platform.Characteristic.On)
+                  .updateValue(!this.currState.ledAlwaysOn);
+                this.platform.log.debug('Display always on:', data.reported.ledalwayson);
+                break;
+              case 'voiceon':
+                this.currState.panelSound = Boolean(data.reported.voiceon);
+                this.panelSoundService
+                  ?.getCharacteristic(this.platform.Characteristic.On)
+                  .updateValue(this.currState.panelSound);
+                this.platform.log.debug('Panel sound:', data.reported.voiceon);
                 break;
               case 'childlockon':
                 this.currState.lockPhysicalControls = Boolean(
@@ -351,6 +374,115 @@ export class FanAccessory extends BaseAccessory {
     });
   }
 
+  private configureModeSwitches() {
+    if (!this.platform.config.exposeFanModeSwitches) {
+      this.removeModeSwitches();
+      return;
+    }
+
+    for (const mode of FAN_MODE_SWITCHES) {
+      const displayName = `${this.accessory.context.device.deviceName} ${mode.name}`;
+      const service = this.accessory.getServiceById(
+        this.platform.Service.Switch,
+        mode.subtype,
+      ) || this.accessory.addService(
+          this.platform.Service.Switch,
+          displayName,
+          mode.subtype,
+        );
+
+      service.displayName = displayName;
+      service
+        .setCharacteristic(this.platform.Characteristic.Name, displayName)
+        .getCharacteristic(this.platform.Characteristic.On)
+        .onSet((value) => this.setDetailedMode(mode.value, value))
+        .onGet(() => this.currState.mode === mode.value)
+        .updateValue(this.currState.mode === mode.value);
+
+      this.modeServices.set(mode.value, service);
+    }
+  }
+
+  private removeModeSwitches() {
+    for (const mode of FAN_MODE_SWITCHES) {
+      const service = this.accessory.getServiceById(
+        this.platform.Service.Switch,
+        mode.subtype,
+      );
+      if (service) {
+        this.accessory.removeService(service);
+      }
+    }
+    this.modeServices.clear();
+  }
+
+  private configurePreferenceSwitches(state) {
+    if (!this.platform.config.exposeFanPreferences) {
+      this.removeSwitch('dreo-display-auto-off');
+      this.removeSwitch('dreo-panel-sound');
+      this.displayAutoOffService = undefined;
+      this.panelSoundService = undefined;
+      return;
+    }
+
+    const deviceName = this.accessory.context.device.deviceName;
+    if (state.ledalwayson !== undefined) {
+      this.currState.ledAlwaysOn = Boolean(state.ledalwayson.state);
+      const displayName = `${deviceName} Display Auto Off`;
+      this.displayAutoOffService = this.accessory.getServiceById(
+        this.platform.Service.Switch,
+        'dreo-display-auto-off',
+      ) || this.accessory.addService(
+          this.platform.Service.Switch,
+          displayName,
+          'dreo-display-auto-off',
+        );
+      this.displayAutoOffService.displayName = displayName;
+      this.displayAutoOffService
+        .setCharacteristic(this.platform.Characteristic.Name, displayName)
+        .getCharacteristic(this.platform.Characteristic.On)
+        .onSet(this.setDisplayAutoOff.bind(this))
+        .onGet(this.getDisplayAutoOff.bind(this))
+        .updateValue(!this.currState.ledAlwaysOn);
+    } else {
+      this.removeSwitch('dreo-display-auto-off');
+      this.displayAutoOffService = undefined;
+    }
+
+    if (state.voiceon !== undefined) {
+      this.currState.panelSound = Boolean(state.voiceon.state);
+      const displayName = `${deviceName} Panel Sound`;
+      this.panelSoundService = this.accessory.getServiceById(
+        this.platform.Service.Switch,
+        'dreo-panel-sound',
+      ) || this.accessory.addService(
+          this.platform.Service.Switch,
+          displayName,
+          'dreo-panel-sound',
+        );
+      this.panelSoundService.displayName = displayName;
+      this.panelSoundService
+        .setCharacteristic(this.platform.Characteristic.Name, displayName)
+        .getCharacteristic(this.platform.Characteristic.On)
+        .onSet(this.setPanelSound.bind(this))
+        .onGet(this.getPanelSound.bind(this))
+        .updateValue(this.currState.panelSound);
+    } else {
+      this.removeSwitch('dreo-panel-sound');
+      this.panelSoundService = undefined;
+    }
+  }
+
+  private removeSwitch(subtype: string) {
+    const service = this.accessory.getServiceById(
+      this.platform.Service.Switch,
+      subtype,
+    );
+    if (service) {
+      this.accessory.removeService(service);
+    }
+  }
+
   // Handle requests to set the "Active" characteristic
   setActive(value) {
     this.platform.log.debug('Triggered SET Active:', value);
@@ -402,12 +534,62 @@ export class FanAccessory extends BaseAccessory {
   // Set fan mode
   async setMode(value) {
     this.platform.webHelper.control(this.sn, {
-      mode: value === this.platform.Characteristic.TargetFanState.AUTO ? 4 : 1,
+      [this.currState.modeCMD]:
+        value === this.platform.Characteristic.TargetFanState.AUTO ? 4 : 1,
     });
   }
 
   async getMode() {
     return this.currState.autoMode;
+  }
+
+  private setDetailedMode(mode: number, value: CharacteristicValue) {
+    if (Boolean(value)) {
+      this.platform.webHelper.control(this.sn, {
+        [this.currState.modeCMD]: mode,
+      });
+      return;
+    }
+
+    if (this.currState.mode === mode) {
+      this.platform.webHelper.control(this.sn, {
+        [this.currState.modeCMD]: 1,
+      });
+    }
+  }
+
+  private updateMode(mode: number) {
+    this.currState.mode = mode;
+    this.currState.autoMode = this.convertModeToBoolean(mode);
+    this.service
+      .getCharacteristic(this.platform.Characteristic.TargetFanState)
+      .updateValue(this.currState.autoMode);
+
+    for (const [modeValue, service] of this.modeServices) {
+      service
+        .getCharacteristic(this.platform.Characteristic.On)
+        .updateValue(modeValue === mode);
+    }
+  }
+
+  private setDisplayAutoOff(value: CharacteristicValue) {
+    this.platform.webHelper.control(this.sn, {
+      ledalwayson: !Boolean(value),
+    });
+  }
+
+  private getDisplayAutoOff() {
+    return !this.currState.ledAlwaysOn;
+  }
+
+  private setPanelSound(value: CharacteristicValue) {
+    this.platform.webHelper.control(this.sn, {
+      voiceon: Boolean(value),
+    });
+  }
+
+  private getPanelSound() {
+    return this.currState.panelSound;
   }
 
   // Turn child lock on/off

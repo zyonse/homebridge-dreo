@@ -49,6 +49,18 @@
         },
         "default": 0,
         "description": "Subtract (or add) a set amount from the temperature reading (use negative numbers to subtract). This setting only applies to fans."
+      },
+      "exposeFanModeSwitches": {
+        "title": "Expose Natural and Sleep Modes",
+        "type": "boolean",
+        "default": false,
+        "description": "Expose Natural Breeze and Sleep Mode as additional fan switches. Native Normal and Auto modes remain available through the fan control."
+      },
+      "exposeFanPreferences": {
+        "title": "Expose Fan Preferences",
+        "type": "boolean",
+        "default": false,
+        "description": "Expose supported display and panel-sound preferences as additional switches."
       }
     }
   },
@@ -67,6 +79,16 @@
       "items": [
         "hideTemperatureSensor",
         "temperatureOffset"
+      ]
+    },
+    {
+      "type": "fieldset",
+      "title": "Additional Fan Controls",
+      "expandable": true,
+      "expanded": false,
+      "items": [
+        "exposeFanModeSwitches",
+        "exposeFanPreferences"
       ]
     }
   ]

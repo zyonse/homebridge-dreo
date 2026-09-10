@@ -44,6 +44,7 @@ Homebridge plugin for Dreo brand smart devices. [Dreo Fans on Amazon](https://ww
 * DR-HTF005S
 * DR-HTF007S
 * DR-HTF011S
+* DR-HTF017S
 
 #### Heaters
 
@@ -64,8 +65,16 @@ Please open an issue if you have another model that works or doesn't work. If yo
 * **Fan Speed:** Fan speed is displayed as a percentage value with steps that are equivalent to those of the Dreo app. (for example, a fan with speeds 1-6 will have steps at 17%, 33%, 50% etc)
 
 * **Oscillate:** Toggles fan oscillation
+* **Natural and Sleep Modes (optional):** Adds separate, clearly named switches for fan modes that HomeKit does not represent natively.
+* **Fan Preferences (optional):** Adds supported display and panel-sound controls as separate, clearly named switches.
 * **Temperature Sensor:** Displays current temperature sensor reading. (for supported devices, check your devices capabilities) Because the Dreo fan temperature sensors are not entirely accurate, you can also set a specific temperature offset for your devices.
 * **Child Lock:** Lock physical fan controls
+
+Additional fan controls are disabled by default, leaving the standard fan tile,
+native oscillation control, and optional temperature sensor. Enable **Expose
+Natural and Sleep Modes** or **Expose Fan Preferences** in the plugin settings
+only when those additional controls are wanted. Their names include the Dreo
+device name so controls from multiple fans remain distinguishable.
 
 ### Heaters
 
@@ -123,6 +132,8 @@ Provide your Dreo app login credentials
     },
     "hideTemperatureSensor": false,
     "temperatureOffset": 0,
+    "exposeFanModeSwitches": false,
+    "exposeFanPreferences": false,
     "name": "Dreo Platform",
     "platform": "DreoPlatform"
   }
