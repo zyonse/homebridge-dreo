@@ -1,26 +1,11 @@
 import { Service, PlatformAccessory } from 'homebridge';
 import { DreoPlatform } from '../platform';
 import { BaseAccessory } from './BaseAccessory';
+import { DREO_DEVICE_CAPABILITIES, DeviceCapabilities } from './devices';
 
 // Known oscillation state keys, in priority order. Add new keys here if Dreo
 // introduces additional oscillation commands on future devices.
 const OSCILLATION_KEYS = ['shakehorizon', 'hoscon', 'oscmode'] as const;
-
-// Fallback maxSpeed for devices whose Dreo API returns an incomplete controlsConf
-// (e.g. { template: 'DR-HPF002S' } with no control array). swingCmd is not needed
-// here — it is auto-detected from whichever oscillation key is present in device state.
-//
-// Future enhancement: resolve the template model name returned in controlsConf against
-// the Dreo API to fetch the real maxSpeed, eliminating the need for this map entirely.
-// Until then, add an entry here for any device that crashes with "No controlsConf" and
-// has a non-standard speed count. Devices with full controlsConf from the API are
-// unaffected and do not need an entry.
-const DEVICE_FALLBACK_CONFIGS: Record<string, { maxSpeed: number }> = {
-  'DR-HPF004S': { maxSpeed: 9 },
-  'DR-HPF007S': { maxSpeed: 9 },
-  'DR-HPF008S': { maxSpeed: 9 },
-  'DR-HTF024S': { maxSpeed: 9 },
-};
 
 /**
  * Platform Accessory
@@ -31,6 +16,15 @@ export class FanAccessory extends BaseAccessory {
   private service: Service;
   private temperatureService?: Service;
   private lightService?: Service;
+
+  // Advanced capability services
+  private horizontalSwingService?: Service;
+  private verticalSwingService?: Service;
+  private horizontalAngleService?: Service;
+  private verticalAngleService?: Service;
+  private modeSwitches: Record<string, Service> = {};
+
+  private capabilities?: DeviceCapabilities;
 
   // Cached copy of latest fan states
   private currState = {
@@ -45,7 +39,13 @@ export class FanAccessory extends BaseAccessory {
     temperature: 0,
     lightOn: false,
     brightness: 100,
+    verticalSwing: false,
+    horizontalAngle: 0,
+    verticalAngle: 0,
+    modes: {} as Record<string, boolean>,
   };
+
+  private hasBrightness = false;
 
   constructor(
     platform: DreoPlatform,
@@ -55,15 +55,19 @@ export class FanAccessory extends BaseAccessory {
     // Call base class constructor
     super(platform, accessory);
 
+    // Get device capabilities
+    const model = accessory.context.device.model;
+    this.capabilities = DREO_DEVICE_CAPABILITIES[model];
+    this.platform.log.debug('Loaded capabilities for %s:', model, JSON.stringify(this.capabilities));
+
     // Initialize fan values
     // Get max fan speed from Dreo API, falling back to device config map for newer models
     // that return empty controlsConf from the API
-    const model = accessory.context.device.model;
     this.currState.maxSpeed = Number(
       accessory.context.device?.controlsConf?.control?.find(
         (params) => params.type === 'Speed',
       )?.items?.[1]?.text ??
-      DEVICE_FALLBACK_CONFIGS[model]?.maxSpeed ??
+      this.capabilities?.maxSpeed ??
       4,
     );
     if (!accessory.context.device?.controlsConf?.control) {
@@ -82,20 +86,17 @@ export class FanAccessory extends BaseAccessory {
     }
 
     // Get the Fanv2 service if it exists, otherwise create a new Fanv2 service
-    // You can create multiple services for each accessory
     this.service =
       this.accessory.getService(this.platform.Service.Fanv2) ||
       this.accessory.addService(this.platform.Service.Fanv2);
 
     // Set the service name, this is what is displayed as the default name on the Home app
-    // In this example we are using the name we stored in the `accessory.context` in the `discoverDevices` method.
     this.service.setCharacteristic(
       this.platform.Characteristic.Name,
       accessory.context.device.deviceName,
     );
 
     // Each service must implement at-minimum the "required characteristics" for the given service type
-    // See https://developers.homebridge.io/#/service/Fanv2
     // Register handlers for the Active Characteristic
     this.service
       .getCharacteristic(this.platform.Characteristic.Active)
@@ -122,12 +123,88 @@ export class FanAccessory extends BaseAccessory {
       'none';
 
     if (this.currState.swingCMD !== 'none') {
-      // Register handlers for Swing Mode (oscillation)
-      this.service
-        .getCharacteristic(this.platform.Characteristic.SwingMode)
-        .onSet(this.setSwingMode.bind(this))
-        .onGet(this.getSwingMode.bind(this));
-      this.currState.swing = Boolean(state[this.currState.swingCMD]?.state ?? false);
+      if (this.currState.swingCMD === 'oscmode') {
+        const oscVal = state.oscmode?.state ?? 0;
+        this.currState.swing = (oscVal === 1 || oscVal === 3);
+        this.currState.verticalSwing = (oscVal === 2 || oscVal === 3);
+
+        // Remove native SwingMode if it exists (to avoid confusion with two separate switches)
+        const swingModeChar = this.service.getCharacteristic(this.platform.Characteristic.SwingMode);
+        if (swingModeChar) {
+          this.platform.log.debug('Removing native SwingMode characteristic for oscmode device');
+          this.service.removeCharacteristic(swingModeChar);
+        }
+
+        // Register Horizontal Swing Switch
+        this.horizontalSwingService =
+          this.accessory.getService('horizontalSwing') ||
+          this.accessory.addService(this.platform.Service.Switch, 'Horizontal Swing', 'horizontalSwing');
+
+        this.horizontalSwingService.setCharacteristic(
+          this.platform.Characteristic.Name,
+          'Horizontal Swing',
+        );
+
+        this.horizontalSwingService.getCharacteristic(this.platform.Characteristic.On)
+          .onSet(this.setHorizontalSwing.bind(this))
+          .onGet(this.getHorizontalSwing.bind(this));
+
+        // Register Vertical Swing Switch if capabilities.verticalRange is present
+        if (this.capabilities?.verticalRange) {
+          this.verticalSwingService =
+            this.accessory.getService('verticalSwing') ||
+            this.accessory.addService(this.platform.Service.Switch, 'Vertical Swing', 'verticalSwing');
+
+          this.verticalSwingService.setCharacteristic(
+            this.platform.Characteristic.Name,
+            'Vertical Swing',
+          );
+
+          this.verticalSwingService.getCharacteristic(this.platform.Characteristic.On)
+            .onSet(this.setVerticalSwing.bind(this))
+            .onGet(this.getVerticalSwing.bind(this));
+        }
+      } else {
+        // Register handlers for Swing Mode (oscillation) for single-direction fans
+        this.service
+          .getCharacteristic(this.platform.Characteristic.SwingMode)
+          .onSet(this.setSwingMode.bind(this))
+          .onGet(this.getSwingMode.bind(this));
+
+        this.currState.swing = Boolean(state[this.currState.swingCMD]?.state ?? false);
+
+        // Clean up custom horizontal/vertical swing switch services if they were cached
+        const cachedHorizSwing = this.accessory.getService('horizontalSwing');
+        if (cachedHorizSwing) {
+          this.accessory.removeService(cachedHorizSwing);
+        }
+        const cachedVertSwing = this.accessory.getService('verticalSwing');
+        if (cachedVertSwing) {
+          this.accessory.removeService(cachedVertSwing);
+        }
+      }
+    } else {
+      // Clean up custom swing services if the device does not support swing at all
+      const cachedHorizSwing = this.accessory.getService('horizontalSwing');
+      if (cachedHorizSwing) {
+        this.accessory.removeService(cachedHorizSwing);
+      }
+      const cachedVertSwing = this.accessory.getService('verticalSwing');
+      if (cachedVertSwing) {
+        this.accessory.removeService(cachedVertSwing);
+      }
+    }
+
+    // Clean up tilt angle services if they are cached but no longer used
+    const cachedHorizontal = this.accessory.getService('horizontalAngle');
+    if (cachedHorizontal) {
+      this.platform.log.debug('Removing cached Horizontal Angle service');
+      this.accessory.removeService(cachedHorizontal);
+    }
+    const cachedVertical = this.accessory.getService('verticalAngle');
+    if (cachedVertical) {
+      this.platform.log.debug('Removing cached Vertical Angle service');
+      this.accessory.removeService(cachedVertical);
     }
 
     // Check if mode control is supported
@@ -138,6 +215,34 @@ export class FanAccessory extends BaseAccessory {
         .onSet(this.setMode.bind(this))
         .onGet(this.getMode.bind(this));
       this.currState.autoMode = this.convertModeToBoolean(state.mode.state);
+
+      // Set up individual switches for preset modes
+      if (this.capabilities?.presetModes) {
+        for (const preset of this.capabilities.presetModes) {
+          // Skip 'normal' since it is the default when others are off
+          if (preset.name === 'normal') {
+            continue;
+          }
+          const serviceName = `${preset.name.charAt(0).toUpperCase() + preset.name.slice(1)} Mode`;
+          const serviceSubtype = `mode_${preset.name}`;
+
+          const modeSwitch =
+            this.accessory.getService(serviceSubtype) ||
+            this.accessory.addService(this.platform.Service.Switch, serviceName, serviceSubtype);
+
+          modeSwitch.setCharacteristic(
+            this.platform.Characteristic.Name,
+            serviceName,
+          );
+
+          modeSwitch.getCharacteristic(this.platform.Characteristic.On)
+            .onSet((value) => this.setPresetMode(preset.name, preset.value, value))
+            .onGet(() => this.getPresetMode(preset.name));
+
+          this.modeSwitches[preset.name] = modeSwitch;
+          this.currState.modes[preset.name] = (state.mode?.state === preset.value);
+        }
+      }
     }
 
     // Check if child lock is supported
@@ -185,9 +290,8 @@ export class FanAccessory extends BaseAccessory {
       }
     }
 
-    if (state.lighton !== undefined && state.brightness !== undefined) {
+    if (state.lighton !== undefined) {
       this.currState.lightOn = state.lighton.state;
-      this.currState.brightness = state.brightness.state;
 
       // Initialize Lightbulb service
       this.lightService =
@@ -196,7 +300,7 @@ export class FanAccessory extends BaseAccessory {
 
       this.lightService.setCharacteristic(
         this.platform.Characteristic.Name,
-        accessory.context.device.deviceName + ' Light',
+        'Light',
       );
 
       this.lightService
@@ -204,10 +308,15 @@ export class FanAccessory extends BaseAccessory {
         .onSet(this.setLightOn.bind(this))
         .onGet(this.getLightOn.bind(this));
 
-      this.lightService
-        .getCharacteristic(this.platform.Characteristic.Brightness)
-        .onSet(this.setBrightness.bind(this))
-        .onGet(this.getBrightness.bind(this));
+      if (state.brightness !== undefined) {
+        this.currState.brightness = state.brightness.state;
+        this.hasBrightness = true;
+
+        this.lightService
+          .getCharacteristic(this.platform.Characteristic.Brightness)
+          .onSet(this.setBrightness.bind(this))
+          .onGet(this.getBrightness.bind(this));
+      }
     }
 
     // Update values from Dreo app
@@ -268,27 +377,62 @@ export class FanAccessory extends BaseAccessory {
                   data.reported.hoscon,
                 );
                 break;
-              case 'oscmode':
-                this.currState.swing = Boolean(data.reported.oscmode);
-                this.service
-                  .getCharacteristic(this.platform.Characteristic.SwingMode)
-                  .updateValue(this.currState.swing);
+              case 'oscmode': {
+                const oscVal = data.reported.oscmode;
+                this.currState.swing = (oscVal === 1 || oscVal === 3);
+                this.currState.verticalSwing = (oscVal === 2 || oscVal === 3);
+                if (this.horizontalSwingService) {
+                  this.horizontalSwingService
+                    .getCharacteristic(this.platform.Characteristic.On)
+                    .updateValue(this.currState.swing);
+                }
+                if (this.verticalSwingService) {
+                  this.verticalSwingService
+                    .getCharacteristic(this.platform.Characteristic.On)
+                    .updateValue(this.currState.verticalSwing);
+                }
                 this.platform.log.debug(
                   'Oscillation mode:',
                   data.reported.oscmode,
                 );
                 break;
-              case 'mode':
-                this.currState.autoMode = this.convertModeToBoolean(
-                  data.reported.mode,
+              }
+              case 'fixedconf': {
+                if (data.reported.fixedconf) {
+                  const [hAngle, vAngle] = data.reported.fixedconf.split(',').map(Number);
+                  this.currState.horizontalAngle = hAngle;
+                  this.currState.verticalAngle = vAngle;
+                }
+                this.platform.log.debug(
+                  'Fixed direction configuration:',
+                  data.reported.fixedconf,
                 );
+                break;
+              }
+              case 'mode': {
+                const currentModeValue = data.reported.mode;
+                this.currState.autoMode = (currentModeValue === 4);
                 this.service
-                  .getCharacteristic(
-                    this.platform.Characteristic.TargetFanState,
-                  )
+                  .getCharacteristic(this.platform.Characteristic.TargetFanState)
                   .updateValue(this.currState.autoMode);
+
+                if (this.capabilities?.presetModes) {
+                  this.capabilities.presetModes.forEach((preset) => {
+                    if (preset.name === 'normal') {
+                      return;
+                    }
+                    const isCurrent = (currentModeValue === preset.value);
+                    this.currState.modes[preset.name] = isCurrent;
+                    if (this.modeSwitches[preset.name]) {
+                      this.modeSwitches[preset.name]
+                        .getCharacteristic(this.platform.Characteristic.On)
+                        .updateValue(isCurrent);
+                    }
+                  });
+                }
                 this.platform.log.debug('Fan mode:', data.reported.mode);
                 break;
+              }
               case 'childlockon':
                 this.currState.lockPhysicalControls = Boolean(
                   data.reported.childlockon,
@@ -330,10 +474,12 @@ export class FanAccessory extends BaseAccessory {
                 this.platform.log.debug('Light on:', data.reported.lighton);
                 break;
               case 'brightness':
-                this.currState.brightness = data.reported.brightness;
-                this.lightService
-                  ?.getCharacteristic(this.platform.Characteristic.Brightness)
-                  .updateValue(this.currState.brightness);
+                if (this.hasBrightness) {
+                  this.currState.brightness = data.reported.brightness;
+                  this.lightService
+                    ?.getCharacteristic(this.platform.Characteristic.Brightness)
+                    .updateValue(this.currState.brightness);
+                }
                 this.platform.log.debug(
                   'Brightness:',
                   data.reported.brightness,
@@ -387,16 +533,82 @@ export class FanAccessory extends BaseAccessory {
     return this.currState.speed;
   }
 
-  // Turn oscillation on/off
+  // Turn oscillation on/off (for single-direction oscillation)
   async setSwingMode(value) {
+    this.currState.swing = Boolean(value);
     this.platform.webHelper.control(this.sn, {
-      [this.currState.swingCMD]:
-        this.currState.swingCMD === 'oscmode' ? Number(value) : Boolean(value),
+      [this.currState.swingCMD]: Boolean(value),
     });
   }
 
   async getSwingMode() {
     return this.currState.swing;
+  }
+
+  // Turn horizontal oscillation on/off (for oscmode devices)
+  setHorizontalSwing(value) {
+    this.platform.log.debug('Setting Horizontal Swing:', value);
+    this.currState.swing = Boolean(value);
+    this.updateOscmode();
+  }
+
+  getHorizontalSwing() {
+    return this.currState.swing;
+  }
+
+  // Turn vertical oscillation on/off (for oscmode devices)
+  setVerticalSwing(value) {
+    this.platform.log.debug('Setting Vertical Swing:', value);
+    this.currState.verticalSwing = Boolean(value);
+    this.updateOscmode();
+  }
+
+  getVerticalSwing() {
+    return this.currState.verticalSwing;
+  }
+
+  private updateOscmode() {
+    let oscmodeValue = 0;
+    if (this.currState.swing && this.currState.verticalSwing) {
+      oscmodeValue = 3;
+    } else if (this.currState.swing) {
+      oscmodeValue = 1;
+    } else if (this.currState.verticalSwing) {
+      oscmodeValue = 2;
+    }
+    this.platform.webHelper.control(this.sn, { oscmode: oscmodeValue });
+  }
+
+
+
+  // Preset Modes
+  setPresetMode(modeName: string, modeValue: number, value: any) {
+    this.platform.log.debug(`Setting Preset Mode ${modeName} to ${value}`);
+    if (value) {
+      this.platform.webHelper.control(this.sn, { mode: modeValue });
+      this.currState.modes[modeName] = true;
+      Object.keys(this.modeSwitches).forEach((otherName) => {
+        if (otherName !== modeName) {
+          this.currState.modes[otherName] = false;
+          this.modeSwitches[otherName].getCharacteristic(this.platform.Characteristic.On)
+            .updateValue(false);
+        }
+      });
+      this.currState.autoMode = (modeName === 'auto');
+      this.service.getCharacteristic(this.platform.Characteristic.TargetFanState)
+        .updateValue(this.currState.autoMode);
+    } else {
+      // Revert to Normal mode (value 1)
+      this.platform.webHelper.control(this.sn, { mode: 1 });
+      this.currState.modes[modeName] = false;
+      this.currState.autoMode = false;
+      this.service.getCharacteristic(this.platform.Characteristic.TargetFanState)
+        .updateValue(false);
+    }
+  }
+
+  getPresetMode(modeName: string) {
+    return !!this.currState.modes[modeName];
   }
 
   // Set fan mode
@@ -425,12 +637,10 @@ export class FanAccessory extends BaseAccessory {
 
   correctedTemperature(temperatureFromDreo) {
     const offset = this.platform.config.temperatureOffset || 0; // default to 0 if not defined
-    // Dreo response is always Fahrenheit - convert to Celsius which is what HomeKit expects
     return ((temperatureFromDreo + offset - 32) * 5) / 9;
   }
 
   convertModeToBoolean(value: number) {
-    // Show all non-automatic modes as "Manual"
     return value === 4;
   }
 

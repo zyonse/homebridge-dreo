@@ -38,6 +38,7 @@ Homebridge plugin for Dreo brand smart devices. [Dreo Fans on Amazon](https://ww
 * DR-HCF003S
 * DR-HPF001S
 * DR-HPF002S
+* DR-HPF022S (3D Air Circulator)
 * DR-HTF001S
 * DR-HTF002S
 * DR-HTF004S
@@ -62,8 +63,9 @@ Please open an issue if you have another model that works or doesn't work. If yo
 ### Fans
 
 * **Fan Speed:** Fan speed is displayed as a percentage value with steps that are equivalent to those of the Dreo app. (for example, a fan with speeds 1-6 will have steps at 17%, 33%, 50% etc)
-
-* **Oscillate:** Toggles fan oscillation
+* **Oscillate:** Toggles fan oscillation (standard single-direction models).
+* **Horizontal & Vertical Swing:** For 3D air circulator models (using `oscmode`), independent **Horizontal Swing** and **Vertical Swing** switches are automatically exposed in HomeKit.
+* **Preset Modes:** Individual switches are exposed for supported modes (like Natural, Sleep, Auto, Turbo, Custom) according to your device's capabilities.
 * **Temperature Sensor:** Displays current temperature sensor reading. (for supported devices, check your devices capabilities) Because the Dreo fan temperature sensors are not entirely accurate, you can also set a specific temperature offset for your devices.
 * **Child Lock:** Lock physical fan controls
 
