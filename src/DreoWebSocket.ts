@@ -85,13 +85,23 @@ export default class DreoWebSocket {
     }
   }
 
+  public get isOpen(): boolean {
+    return this.openSocket() !== undefined;
+  }
+
   public send(data: string) {
-    if (this.ws?.readyState !== WebSocket.OPEN) {
+    const ws = this.openSocket();
+    if (!ws) {
       // Matches the old behaviour of dropping sends while disconnected, but says so out loud
       this.log.debug('WebSocket not open, dropping message');
       return;
     }
-    this.ws.send(data);
+    ws.send(data);
+  }
+
+  // The current socket if it is open, so callers get a defined socket to use
+  private openSocket(): WebSocket | undefined {
+    return this.ws?.readyState === WebSocket.OPEN ? this.ws : undefined;
   }
 
   private async connect() {
@@ -180,11 +190,12 @@ export default class DreoWebSocket {
   private startKeepalive() {
     this.stopKeepalive();
     this.keepaliveTimer = setInterval(() => {
-      if (this.ws?.readyState !== WebSocket.OPEN) {
+      const ws = this.openSocket();
+      if (!ws) {
         return;
       }
-      this.ws.send('2');
-      this.ws.ping();
+      ws.send('2');
+      ws.ping();
 
       // A half-open TCP connection accepts writes forever, so wait for a pong to prove it is alive.
       // Skipped until we know the server answers pings at all, otherwise we would kill a healthy socket.

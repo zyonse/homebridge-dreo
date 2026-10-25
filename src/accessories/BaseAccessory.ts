@@ -9,11 +9,11 @@ interface DreoDevice {
 }
 
 export abstract class BaseAccessory {
-  protected readonly sn = this.accessory.context.device.sn;
+  public readonly sn = this.accessory.context.device.sn;
 
   constructor(
     protected readonly platform: DreoPlatform,
-    protected readonly accessory: PlatformAccessory,
+    public readonly accessory: PlatformAccessory,
   ) {
     // Set accessory information
     accessory.getService(this.platform.Service.AccessoryInformation)!
@@ -56,4 +56,5 @@ export abstract class BaseAccessory {
   // Abstract methods that derived classes must implement
   abstract setActive(value: boolean): void;
   abstract getActive(): boolean;
+  abstract updateState(state): void;
 }

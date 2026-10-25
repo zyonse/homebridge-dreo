@@ -37,7 +37,7 @@ class MockDreoServer {
         }
         const msg = JSON.parse(text);
         if (msg.method === 'control') {
-          this.controls.push(msg);
+          this.controls.push({ ...msg, receivedAt: Date.now() });
           socket.send(JSON.stringify({
             devicesn: msg.deviceSn,
             method: 'control-reply',

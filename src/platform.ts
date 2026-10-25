@@ -4,6 +4,7 @@ import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { FanAccessory } from './accessories/FanAccessory';
 import { HeaterAccessory } from './accessories/HeaterAccessory';
 import { HumidifierAccessory } from './accessories/HumidifierAccessory';
+import { BaseAccessory } from './accessories/BaseAccessory';
 import DreoAPI from './DreoAPI';
 
 /**
@@ -18,6 +19,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
 
   // This is used to track restored cached accessories
   public readonly accessories: PlatformAccessory[] = [];
+  private readonly accessoryHandlers: BaseAccessory[] = [];
 
   constructor(
     public readonly log: Logger,
@@ -106,15 +108,25 @@ export class DreoPlatform implements DynamicPlatformPlugin {
     // Create a set of UUIDs for the currently discovered devices
     const discoveredDeviceUUIDs = new Set(dreoDevices.map(device => this.api.hap.uuid.generate(device.sn)));
 
-    // Unregister accessories that are no longer present
+    // Unregister accessories that are no longer present. An empty list is far more likely to be a
+    // cloud hiccup than every device being removed from the account, and unregistering drops the
+    // accessories' rooms, scenes and automations in HomeKit, so keep them in that case.
     const accessoriesToRemove = this.accessories.filter(accessory => !discoveredDeviceUUIDs.has(accessory.UUID));
-    if (accessoriesToRemove.length > 0) {
+    if (dreoDevices.length === 0 && accessoriesToRemove.length > 0) {
+      this.log.warn('Dreo returned no devices; keeping %d cached accessories', accessoriesToRemove.length);
+    } else if (accessoriesToRemove.length > 0) {
       this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, accessoriesToRemove);
       this.log.info('Removing accessories:', accessoriesToRemove.map(accessory => accessory.displayName).join(', '));
     }
 
     // Open WebSocket (used to control devices later)
     await this.webHelper.startWebSocket();
+
+    // Listen for WebSocket reconnection to refresh device states
+    this.webHelper.addEventListener('open', async () => {
+      this.log.info('WebSocket connected/reconnected. Refreshing device states...');
+      await this.refreshDeviceStates();
+    });
 
     // Loop over the discovered devices and register each one if it has not already been registered
     for (const device of dreoDevices) {
@@ -172,6 +184,8 @@ export class DreoPlatform implements DynamicPlatformPlugin {
       // Find the matching prefix
       let modelPrefix = SUPPORTED_MODEL_PREFIXES.find(prefix => device.model.startsWith(prefix));
 
+      let handler: BaseAccessory | undefined = undefined;
+
       // Determine device type based on the matched prefix
       switch (modelPrefix) {
         case 'DR-HTF':
@@ -181,14 +195,14 @@ export class DreoPlatform implements DynamicPlatformPlugin {
         case 'DR-HAP':
           // Tower Fan, Air Circulator, Ceiling Fan, Air Purifier
           accessory.category = this.api.hap.Categories.FAN;
-          new FanAccessory(this, accessory, state);
+          handler = new FanAccessory(this, accessory, state);
           break;
 
         case 'DR-HSH':
         case 'WH':
           // Heater
           accessory.category = this.api.hap.Categories.AIR_HEATER;
-          new HeaterAccessory(this, accessory, state);
+          handler = new HeaterAccessory(this, accessory, state);
           break;
         case 'DR-HAC':
           // Air Conditioner
@@ -200,16 +214,58 @@ export class DreoPlatform implements DynamicPlatformPlugin {
         case 'DR-HHM':
           // Humidifier
           accessory.category = this.api.hap.Categories.AIR_HUMIDIFIER;
-          new HumidifierAccessory(this, accessory, state);
+          handler = new HumidifierAccessory(this, accessory, state);
           break;
 
         default:
           this.log.error('Error, unknown device type:', device.productName, device.model);
       }
 
+      if (handler) {
+        this.accessoryHandlers.push(handler);
+      }
+
       if (!existingAccessory && modelPrefix) {
         // Link accessory to the platform if model is supported
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+      }
+    }
+  }
+
+  /**
+   * Pull authoritative state for one device from the HTTP API and push it to HomeKit.
+   * Called shortly after commands are sent: the WebSocket control-reply is only a
+   * server ack, so a command the device ignored would otherwise leave HomeKit showing
+   * a state the hardware never reached.
+   */
+  async reconcileDevice(sn: string) {
+    const handler = this.accessoryHandlers.find(accessoryHandler => accessoryHandler.sn === sn);
+    if (handler === undefined) {
+      return;
+    }
+    try {
+      const state = await this.webHelper.getState(sn);
+      if (state !== undefined) {
+        handler.updateState(state);
+      }
+    } catch (error) {
+      this.log.debug(`Failed to reconcile state for ${handler.accessory.displayName}:`, error);
+    }
+  }
+
+  async refreshDeviceStates() {
+    this.log.debug('Refreshing state of all accessories...');
+    for (const handler of this.accessoryHandlers) {
+      try {
+        const state = await this.webHelper.getState(handler.sn);
+        if (state !== undefined) {
+          handler.updateState(state);
+          this.log.debug(`Successfully refreshed state for ${handler.accessory.displayName}`);
+        } else {
+          this.log.warn(`Could not refresh state for ${handler.accessory.displayName} (response undefined)`);
+        }
+      } catch (error) {
+        this.log.error(`Failed to refresh state for ${handler.accessory.displayName}:`, error);
       }
     }
   }
