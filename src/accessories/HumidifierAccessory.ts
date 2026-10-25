@@ -261,13 +261,10 @@ export class HumidifierAccessory extends BaseAccessory {
   setActive(value: unknown): void {
     this.platform.log.debug('Triggered SET Active: %s', value);
     const isActive = Boolean(value);
-    // Check state to prevent duplicate requests
-    if (this.on !== isActive) {
-      // Send to Dreo server via websocket
-      this.platform.webHelper.control(this.sn, {'poweron': isActive});
-    }
-    // Update HomeKit state
     this.on = isActive;
+    // Send to Dreo server via websocket
+    this.platform.webHelper.control(this.sn, {'poweron': isActive});
+    // Update HomeKit state
     this.updateCurrentHumidifierState();
   }
 

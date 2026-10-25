@@ -355,14 +355,14 @@ export class FanAccessory extends BaseAccessory {
   // Handle requests to set the "Active" characteristic
   setActive(value) {
     this.platform.log.debug('Triggered SET Active:', value);
-    // Check state to prevent duplicate requests
-    if (this.currState.on !== Boolean(value)) {
-      // Send to Dreo server via websocket
-      this.platform.webHelper.control(this.sn, {
-        [this.currState.powerCMD]: Boolean(value),
-      });
-    }
-    this.currState.on = Boolean(value);
+    const isActive = Boolean(value);
+    this.currState.on = isActive;
+    // When HomeKit turns the fan on at a speed (scenes, slider from off) it writes
+    // Active and RotationSpeed together; the command queue merges the two into a
+    // single power-on + windlevel message
+    this.platform.webHelper.control(this.sn, {
+      [this.currState.powerCMD]: isActive,
+    });
   }
 
   // Handle requests to get the current value of the "Active" characteristic

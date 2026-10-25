@@ -287,12 +287,10 @@ export class HeaterAccessory extends BaseAccessory {
   // Handle requests to set the "Active" characteristic
   setActive(value) {
     this.platform.log.debug('Triggered SET Active:', value);
-    // Check state to prevent duplicate requests
-    if (this.on !== Boolean(value)) {
-      // Send to Dreo server via websocket
-      this.platform.webHelper.control(this.sn, {'poweron': Boolean(value)});
-    }
-    this.on = Boolean(value);
+    const isActive = Boolean(value);
+    this.on = isActive;
+    // Send to Dreo server via websocket
+    this.platform.webHelper.control(this.sn, {'poweron': isActive});
     this.updateHeaterState();
   }
 
