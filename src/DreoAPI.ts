@@ -144,6 +144,37 @@ export default class DreoAPI {
     this.ws.addEventListener(event, listener);
   }
 
+  // Deliver a synthetic message to accessory listeners, using the same format as Dreo's own messages
+  public injectMessage(payload: object) {
+    this.ws?.dispatchMessage(JSON.stringify(payload));
+  }
+
+  // Report a device as unreachable, the same way Dreo does when a device drops off its network
+  public markUnreachable(sn: string) {
+    this.injectMessage({devicesn: sn, method: 'device-offline', reported: {}});
+  }
+
+  // Fetch a device's current state and deliver it the same way Dreo does when a device reconnects
+  public async refreshDevice(sn: string) {
+    const state = await this.getState(sn);
+    if (state === undefined) {
+      return;
+    }
+    const online = state.connected?.state ?? true;
+    if (!online) {
+      this.markUnreachable(sn);
+      return;
+    }
+    // State API values are wrapped as {key: {state: value}}; reports are flat {key: value}
+    const reported = {};
+    for (const [key, value] of Object.entries(state)) {
+      if (value && typeof value === 'object' && 'state' in value) {
+        reported[key] = (value as {state: unknown}).state;
+      }
+    }
+    this.injectMessage({devicesn: sn, method: 'device-online', reported: reported});
+  }
+
   // Send control commands to device (fan speed, power, etc)
   public control(sn, command) {
     this.ws.send(JSON.stringify({

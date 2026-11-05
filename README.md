@@ -59,6 +59,10 @@ Please open an issue if you have another model that works or doesn't work. If yo
 
 ## Supported Features
 
+### Offline Devices
+
+Devices that Dreo reports as offline (unplugged, or disconnected from WiFi) show as **No Response** in HomeKit, and recover automatically when they reconnect. If Homebridge loses its connection to the Dreo cloud for more than 30 seconds, all Dreo devices show as No Response until the connection is restored, since they can't be controlled in the meantime. Device state is refreshed after every reconnect.
+
 ### Fans
 
 * **Fan Speed:** Fan speed is displayed as a percentage value with steps that are equivalent to those of the Dreo app. (for example, a fan with speeds 1-6 will have steps at 17%, 33%, 50% etc)

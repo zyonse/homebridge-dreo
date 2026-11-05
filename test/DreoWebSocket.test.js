@@ -185,3 +185,85 @@ test('stop() ends reconnection', async (t) => {
 
   assert.strictEqual(server.connections, 1, 'no reconnect should happen after stop()');
 });
+
+// --- Outage reporting ('lost' and the 'open' reconnect flags) ---
+
+const GRACE = 600;
+
+// Builds a client whose URL follows `ctx.server`, so a test can replace the server mid-run
+function trackOutages(t, ctx) {
+  const client = new DreoWebSocket(async () => ctx.server.url, silentLog, { ...fast, lostGracePeriod: GRACE });
+  const events = { lost: 0, opens: [] };
+  client.addEventListener('lost', () => events.lost++);
+  client.addEventListener('open', (e) => events.opens.push(e));
+  t.after(async () => {
+    client.stop();
+    await ctx.server.stop();
+  });
+  return { client, events };
+}
+
+test('the first connection is not flagged as a reconnect', async (t) => {
+  const ctx = { server: await new MockDreoServer().start() };
+  const { client, events } = trackOutages(t, ctx);
+  client.start();
+
+  assert.ok(await waitFor(() => events.opens.length === 1));
+  assert.deepStrictEqual(events.opens[0], { reconnect: false, afterLost: false });
+});
+
+test('a brief drop is flagged as a reconnect but never reported as lost', async (t) => {
+  const ctx = { server: await new MockDreoServer().start() };
+  const { client, events } = trackOutages(t, ctx);
+  client.start();
+  await waitFor(() => events.opens.length === 1);
+
+  ctx.server.dropAll();
+
+  assert.ok(await waitFor(() => events.opens.length === 2), 'should reconnect');
+  assert.deepStrictEqual(events.opens[1], { reconnect: true, afterLost: false });
+  await sleep(GRACE + 100);
+  assert.strictEqual(events.lost, 0, 'a reconnect inside the grace period must not report the connection lost');
+});
+
+test('an outage longer than the grace period is reported lost once, and flagged on reconnect', async (t) => {
+  const ctx = { server: await new MockDreoServer().start() };
+  const { client, events } = trackOutages(t, ctx);
+  client.start();
+  await waitFor(() => events.opens.length === 1);
+
+  // Take the cloud away entirely; reconnect attempts keep failing
+  await ctx.server.stop();
+  assert.ok(await waitFor(() => events.lost === 1), 'should report the outage after the grace period');
+  await sleep(GRACE + 200);
+  assert.strictEqual(events.lost, 1, 'repeated failed reconnects must not report the outage again');
+
+  ctx.server = await new MockDreoServer().start();
+  assert.ok(await waitFor(() => events.opens.length === 2), 'should reconnect once the cloud is back');
+  assert.deepStrictEqual(events.opens[1], { reconnect: true, afterLost: true });
+});
+
+test('an outage before the first connection is flagged once connected', async (t) => {
+  // Start with nothing listening, so the very first connection attempts fail
+  const ctx = { server: await new MockDreoServer().start() };
+  await ctx.server.stop();
+  const { client, events } = trackOutages(t, ctx);
+  client.start();
+
+  assert.ok(await waitFor(() => events.lost === 1));
+  ctx.server = await new MockDreoServer().start();
+  assert.ok(await waitFor(() => events.opens.length === 1), 'should connect once the cloud is up');
+  assert.deepStrictEqual(events.opens[0], { reconnect: true, afterLost: true });
+});
+
+test('stop() during an outage does not report it lost', async (t) => {
+  const ctx = { server: await new MockDreoServer().start() };
+  const { client, events } = trackOutages(t, ctx);
+  client.start();
+  await waitFor(() => events.opens.length === 1);
+
+  ctx.server.dropAll();
+  client.stop();
+  await sleep(GRACE + 100);
+  assert.strictEqual(events.lost, 0);
+});

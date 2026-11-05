@@ -53,7 +53,7 @@ export class FanAccessory extends BaseAccessory {
     private readonly state,
   ) {
     // Call base class constructor
-    super(platform, accessory);
+    super(platform, accessory, state);
 
     // Initialize fan values
     // Get max fan speed from Dreo API, falling back to device config map for newer models
@@ -99,8 +99,8 @@ export class FanAccessory extends BaseAccessory {
     // Register handlers for the Active Characteristic
     this.service
       .getCharacteristic(this.platform.Characteristic.Active)
-      .onSet(this.setActive.bind(this))
-      .onGet(this.getActive.bind(this));
+      .onSet(this.whenOnline(this.setActive))
+      .onGet(this.whenOnline(this.getActive));
 
     // Register handlers for the RotationSpeed Characteristic
     this.service
@@ -109,8 +109,8 @@ export class FanAccessory extends BaseAccessory {
         // Setting minStep defines fan speed steps in HomeKit
         minStep: 100 / this.currState.maxSpeed,
       })
-      .onSet(this.setRotationSpeed.bind(this))
-      .onGet(this.getRotationSpeed.bind(this));
+      .onSet(this.whenOnline(this.setRotationSpeed))
+      .onGet(this.whenOnline(this.getRotationSpeed));
 
     // Check whether fan supports oscillation. First try the API controlsConf, then
     // auto-detect from whichever oscillation key is present in the device state.
@@ -125,8 +125,8 @@ export class FanAccessory extends BaseAccessory {
       // Register handlers for Swing Mode (oscillation)
       this.service
         .getCharacteristic(this.platform.Characteristic.SwingMode)
-        .onSet(this.setSwingMode.bind(this))
-        .onGet(this.getSwingMode.bind(this));
+        .onSet(this.whenOnline(this.setSwingMode))
+        .onGet(this.whenOnline(this.getSwingMode));
       this.currState.swing = Boolean(state[this.currState.swingCMD]?.state ?? false);
     }
 
@@ -135,8 +135,8 @@ export class FanAccessory extends BaseAccessory {
       // Register handlers for Target Fan State
       this.service
         .getCharacteristic(this.platform.Characteristic.TargetFanState)
-        .onSet(this.setMode.bind(this))
-        .onGet(this.getMode.bind(this));
+        .onSet(this.whenOnline(this.setMode))
+        .onGet(this.whenOnline(this.getMode));
       this.currState.autoMode = this.convertModeToBoolean(state.mode.state);
     }
 
@@ -145,8 +145,8 @@ export class FanAccessory extends BaseAccessory {
       // Register handlers for Lock Physical Controls
       this.service
         .getCharacteristic(this.platform.Characteristic.LockPhysicalControls)
-        .onSet(this.setLockPhysicalControls.bind(this))
-        .onGet(this.getLockPhysicalControls.bind(this));
+        .onSet(this.whenOnline(this.setLockPhysicalControls))
+        .onGet(this.whenOnline(this.getLockPhysicalControls));
       this.currState.lockPhysicalControls = Boolean(state.childlockon.state);
     }
 
@@ -174,7 +174,7 @@ export class FanAccessory extends BaseAccessory {
       // Bind the get handler for temperature to this service
       this.temperatureService
         .getCharacteristic(this.platform.Characteristic.CurrentTemperature)
-        .onGet(this.getTemperature.bind(this));
+        .onGet(this.whenOnline(this.getTemperature));
     } else {
       const existingTemperatureService = this.accessory.getService(
         this.platform.Service.TemperatureSensor,
@@ -201,13 +201,13 @@ export class FanAccessory extends BaseAccessory {
 
       this.lightService
         .getCharacteristic(this.platform.Characteristic.On)
-        .onSet(this.setLightOn.bind(this))
-        .onGet(this.getLightOn.bind(this));
+        .onSet(this.whenOnline(this.setLightOn))
+        .onGet(this.whenOnline(this.getLightOn));
 
       this.lightService
         .getCharacteristic(this.platform.Characteristic.Brightness)
-        .onSet(this.setBrightness.bind(this))
-        .onGet(this.getBrightness.bind(this));
+        .onSet(this.whenOnline(this.setBrightness))
+        .onGet(this.whenOnline(this.getBrightness));
     }
 
     // Update values from Dreo app
@@ -222,7 +222,8 @@ export class FanAccessory extends BaseAccessory {
         if (
           data.method === 'control-report' ||
           data.method === 'control-reply' ||
-          data.method === 'report'
+          data.method === 'report' ||
+          data.method === 'device-online'
         ) {
           Object.keys(data.reported).forEach((key) => {
             switch (key) {

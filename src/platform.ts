@@ -19,6 +19,9 @@ export class DreoPlatform implements DynamicPlatformPlugin {
   // This is used to track restored cached accessories
   public readonly accessories: PlatformAccessory[] = [];
 
+  // Serial numbers of devices with an active accessory handler
+  private readonly activeDeviceSNs: string[] = [];
+
   constructor(
     public readonly log: Logger,
     public readonly config: PlatformConfig,
@@ -115,6 +118,7 @@ export class DreoPlatform implements DynamicPlatformPlugin {
 
     // Open WebSocket (used to control devices later)
     await this.webHelper.startWebSocket();
+    this.watchCloudConnection();
 
     // Loop over the discovered devices and register each one if it has not already been registered
     for (const device of dreoDevices) {
@@ -207,10 +211,40 @@ export class DreoPlatform implements DynamicPlatformPlugin {
           this.log.error('Error, unknown device type:', device.productName, device.model);
       }
 
+      if (modelPrefix) {
+        this.activeDeviceSNs.push(device.sn);
+      }
+
       if (!existingAccessory && modelPrefix) {
         // Link accessory to the platform if model is supported
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
       }
     }
+  }
+
+  /**
+   * Mark every device as not responding if the connection to the Dreo cloud stays down,
+   * and resync all devices after a reconnect, since reports sent while disconnected are lost.
+   */
+  private watchCloudConnection() {
+    this.webHelper.addEventListener('lost', () => {
+      this.log.warn('Lost connection to the Dreo cloud, marking devices as not responding');
+      this.activeDeviceSNs.forEach(sn => this.webHelper.markUnreachable(sn));
+    });
+
+    this.webHelper.addEventListener('open', async ({reconnect, afterLost}) => {
+      // The first connection needs no refresh: accessories are built from freshly fetched state
+      if (!reconnect) {
+        return;
+      }
+      if (afterLost) {
+        this.log.info('Reconnected to the Dreo cloud, refreshing device state');
+      } else {
+        this.log.debug('Reconnected to the Dreo cloud, refreshing device state');
+      }
+      for (const sn of this.activeDeviceSNs) {
+        await this.webHelper.refreshDevice(sn);
+      }
+    });
   }
 }

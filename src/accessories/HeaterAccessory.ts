@@ -48,7 +48,7 @@ export class HeaterAccessory extends BaseAccessory {
     private readonly state,
   ) {
     // Call base class constructor
-    super(platform, accessory);
+    super(platform, accessory, state);
 
     // Update current state in homebridge from Dreo API
     this.temperature = this.convertToCelsius(state.temperature.state);
@@ -110,12 +110,12 @@ export class HeaterAccessory extends BaseAccessory {
 
     // Register handlers for the Active characteristic
     this.service.getCharacteristic(this.platform.Characteristic.Active)
-      .onSet(this.setActive.bind(this))
-      .onGet(this.getActive.bind(this));
+      .onSet(this.whenOnline(this.setActive))
+      .onGet(this.whenOnline(this.getActive));
 
     // Register handlers for Current Heater-Cooler State
     this.service.getCharacteristic(this.platform.Characteristic.CurrentHeaterCoolerState)
-      .onGet(this.getCurrentHeaterCoolerState.bind(this));
+      .onGet(this.whenOnline(this.getCurrentHeaterCoolerState));
 
     // Register handlers for Target Heater-Cooler State
     /**
@@ -124,8 +124,8 @@ export class HeaterAccessory extends BaseAccessory {
     * 2: Cool (Dreo fan only mode)
     */
     this.service.getCharacteristic(this.platform.Characteristic.TargetHeaterCoolerState)
-      .onSet(this.setTargetHeaterCoolerState.bind(this))
-      .onGet(this.getTargetHeaterCoolerState.bind(this))
+      .onSet(this.whenOnline(this.setTargetHeaterCoolerState))
+      .onGet(this.whenOnline(this.getTargetHeaterCoolerState))
       .setProps({  // We can disable modes by limiting these values
         minValue: 0,
         maxValue: 2,
@@ -134,7 +134,7 @@ export class HeaterAccessory extends BaseAccessory {
 
     // Register handlers for Current Temperature characteristic
     this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
-      .onGet(this.getCurrentTemperature.bind(this));
+      .onGet(this.whenOnline(this.getCurrentTemperature));
 
     // Register handlers for Heating Threshold Temperature
     let ecoRange = {startValue: 41, endValue: 95};  // Default temperature range
@@ -144,8 +144,8 @@ export class HeaterAccessory extends BaseAccessory {
     }
     this.minTemp = this.convertToCelsius(ecoRange.startValue);
     this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature)
-      .onSet(this.setHeatingThresholdTemperature.bind(this))
-      .onGet(this.getHeatingThresholdTemperature.bind(this))
+      .onSet(this.whenOnline(this.setHeatingThresholdTemperature))
+      .onGet(this.whenOnline(this.getHeatingThresholdTemperature))
       .setProps({
         minValue: this.minTemp,
         maxValue: this.convertToCelsius(ecoRange.endValue),
@@ -154,8 +154,8 @@ export class HeaterAccessory extends BaseAccessory {
 
     // Register handlers for Cooling Threshold Temperature
     this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature)
-      .onSet(this.setCoolingThresholdTemperature.bind(this))
-      .onGet(this.getCoolingThresholdTemperature.bind(this))
+      .onSet(this.whenOnline(this.setCoolingThresholdTemperature))
+      .onGet(this.whenOnline(this.getCoolingThresholdTemperature))
       .setProps({  // Only allow single value for cooling mode
         minValue: this.minTemp + 8,
         maxValue: this.minTemp + 8,
@@ -164,15 +164,15 @@ export class HeaterAccessory extends BaseAccessory {
 
     // Register handlers for Lock Physical Controls
     this.service.getCharacteristic(this.platform.Characteristic.LockPhysicalControls)
-      .onSet(this.setLockPhysicalControls.bind(this))
-      .onGet(this.getLockPhysicalControls.bind(this));
+      .onSet(this.whenOnline(this.setLockPhysicalControls))
+      .onGet(this.whenOnline(this.getLockPhysicalControls));
 
     // Rotation speed (used to set oscillation angle)
     // Only show this if the fan supports setting specific oscillation angles
     if (this.canSetAngle) {
       this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
-        .onSet(this.setRotationSpeed.bind(this))
-        .onGet(this.getRotationSpeed.bind(this))
+        .onSet(this.whenOnline(this.setRotationSpeed))
+        .onGet(this.whenOnline(this.getRotationSpeed))
         .setProps({
           minStep: 50,
         });
@@ -181,15 +181,15 @@ export class HeaterAccessory extends BaseAccessory {
     // Temperature display units
     if (this.canSetTempUnit) {
       this.service.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits)
-        .onSet(this.setTemperatureDisplayUnits.bind(this))
-        .onGet(this.getTemperatureDisplayUnits.bind(this));
+        .onSet(this.whenOnline(this.setTemperatureDisplayUnits))
+        .onGet(this.whenOnline(this.getTemperatureDisplayUnits));
     }
 
     // Swing mode
     if (this.canSwing) {
       this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
-        .onSet(this.setSwingMode.bind(this))
-        .onGet(this.getSwingMode.bind(this));
+        .onSet(this.whenOnline(this.setSwingMode))
+        .onGet(this.whenOnline(this.getSwingMode));
     }
 
 
@@ -202,7 +202,8 @@ export class HeaterAccessory extends BaseAccessory {
         platform.log.debug('Incoming %s', message.data);
 
         // Check if we need to update fan state in homekit
-        if (data.method === 'control-report' || data.method === 'control-reply' || data.method === 'report') {
+        if (data.method === 'control-report' || data.method === 'control-reply' || data.method === 'report' ||
+          data.method === 'device-online') {
           Object.keys(data.reported).forEach(key => {
             switch(key) {
               case 'poweron':

@@ -40,6 +40,7 @@ interface DreoState {
   rhautolevel: {state: number};
   rhsleeplevel: {state: number};
   wrong: {state: number};
+  connected?: {state: boolean};  // Cloud connection status
 }
 
 // Use integer values for HomeKit humidity thresholds
@@ -76,7 +77,7 @@ export class HumidifierAccessory extends BaseAccessory {
     private readonly state: DreoState,
   ) {
     // Call base class constructor
-    super(platform, accessory);
+    super(platform, accessory, state);
 
     // Update current state in homebridge from Dreo API
     this.on = state.poweron?.state ?? false;
@@ -114,17 +115,17 @@ export class HumidifierAccessory extends BaseAccessory {
     // ON / OFF
     // Register handlers for the Humidifier Active characteristic
     this.humidifierService.getCharacteristic(this.platform.Characteristic.Active)
-    .onGet(this.getActive.bind(this))
-    .onSet(this.setActive.bind(this));
+    .onGet(this.whenOnline(this.getActive))
+    .onSet(this.whenOnline(this.setActive));
     this.sleepSwitchService.getCharacteristic(this.platform.Characteristic.On)
-    .onGet(this.getSleepMode.bind(this))
-    .onSet(this.setSleepMode.bind(this));
+    .onGet(this.whenOnline(this.getSleepMode))
+    .onSet(this.whenOnline(this.setSleepMode));
 
     // Only register Hot Fog handlers if the service exists (device supports it)
     if (this.hotFogSwitchService) {
       this.hotFogSwitchService.getCharacteristic(this.platform.Characteristic.On)
-      .onGet(this.getHotFog.bind(this))
-      .onSet(this.setHotFog.bind(this));
+      .onGet(this.whenOnline(this.getHotFog))
+      .onSet(this.whenOnline(this.setHotFog));
     }
 
     // Register handlers for Current Humidifier State characteristic
@@ -141,11 +142,11 @@ export class HumidifierAccessory extends BaseAccessory {
       maxValue: 2,
       validValues: [0, 1, 2],
     })
-    .onGet(this.getCurrentHumidifierState.bind(this));
+    .onGet(this.whenOnline(this.getCurrentHumidifierState));
 
     // Register handlers for Current Humidifier Water Level characteristic
     this.humidifierService.getCharacteristic(this.platform.Characteristic.WaterLevel)
-    .onGet(this.getCurrentHumidifierWaterLevel.bind(this));
+    .onGet(this.whenOnline(this.getCurrentHumidifierWaterLevel));
 
     // Register handlers for Target Humidifier Mode characteristic
     // HM311S is humidifier-only, so only expose humidifier mode (1) to avoid "Humidifier-Dehumidifier" display
@@ -155,8 +156,8 @@ export class HumidifierAccessory extends BaseAccessory {
       maxValue: 1,
       validValues: [1], // Only humidifier mode - this makes HomeKit show just "Humidifier"
     })
-    .onGet(this.getTargetHumidifierMode.bind(this))
-    .onSet(this.setTargetHumidifierMode.bind(this));
+    .onGet(this.whenOnline(this.getTargetHumidifierMode))
+    .onSet(this.whenOnline(this.setTargetHumidifierMode));
 
     // Set RelativeHumidityHumidifierThreshold
     // HomeKit range matches device capabilities (30-90%) for clearer user interface
@@ -167,8 +168,8 @@ export class HumidifierAccessory extends BaseAccessory {
       maxValue: 90,
       minStep: 1,
     })
-    .onGet(this.getTargetHumidity.bind(this))
-    .onSet(this.setTargetHumidity.bind(this));
+    .onGet(this.whenOnline(this.getTargetHumidity))
+    .onSet(this.whenOnline(this.setTargetHumidity));
 
     // Force an immediate update to ensure HomeKit uses the new properties for both characteristics
     setTimeout(() => {
@@ -184,9 +185,9 @@ export class HumidifierAccessory extends BaseAccessory {
 
     // Register handlers for Current Humidity characteristic
     this.humidifierService.getCharacteristic(this.platform.Characteristic.CurrentRelativeHumidity)
-    .onGet(this.getCurrentHumidity.bind(this));
+    .onGet(this.whenOnline(this.getCurrentHumidity));
     this.humidityService.getCharacteristic(this.platform.Characteristic.CurrentRelativeHumidity)
-    .onGet(this.getCurrentHumidity.bind(this));
+    .onGet(this.whenOnline(this.getCurrentHumidity));
 
     // Register handlers for manual fog level characteristic
     this.humidifierService.getCharacteristic(this.platform.Characteristic.RotationSpeed)
@@ -195,8 +196,8 @@ export class HumidifierAccessory extends BaseAccessory {
       maxValue: 6,
       validValues: [0, 1, 2, 3, 4, 5, 6], // [0: off, 1-6: fog levels]
     })
-    .onGet(this.getTargetFogLevel.bind(this))
-    .onSet(this.setTargetFogLevel.bind(this));
+    .onGet(this.whenOnline(this.getTargetFogLevel))
+    .onSet(this.whenOnline(this.setTargetFogLevel));
 
     // Update values from Dreo App
     platform.webHelper.addEventListener('message', (message: MessageEvent) => {
@@ -204,7 +205,7 @@ export class HumidifierAccessory extends BaseAccessory {
       try {
         data = JSON.parse(message.data);
         if (data.devicesn === accessory.context.device.sn) {
-          if (data.method && ['control-report', 'control-reply', 'report'].includes(data.method) && data.reported) {
+          if (data.method && ['control-report', 'control-reply', 'report', 'device-online'].includes(data.method) && data.reported) {
             Object.keys(data.reported).forEach(key => this.processReportedKey(key, data.reported!));
           }
         }

@@ -10,6 +10,9 @@ const KEEPALIVE_INTERVAL = 15000;
 const PONG_TIMEOUT = 10000;
 // How long to wait for the handshake to complete before giving up and retrying
 const CONNECT_TIMEOUT = 10000;
+// How long the connection may stay down before 'lost' is emitted. Short drops are routine
+// (Dreo closes idle sockets) and reconnect within a few seconds, so they shouldn't count.
+const LOST_GRACE_PERIOD = 30000;
 
 type Listener = (event) => void;
 
@@ -20,6 +23,7 @@ export interface DreoWebSocketOptions {
   connectTimeout?: number;
   minReconnectDelay?: number;
   maxReconnectDelay?: number;
+  lostGracePeriod?: number;
 }
 
 /**
@@ -27,6 +31,12 @@ export interface DreoWebSocketOptions {
  *
  * Listeners are held here rather than on the underlying socket, so registrations made once at
  * startup survive every reconnect. The socket itself is disposable; this wrapper is not.
+ *
+ * Events:
+ *  - 'open'    {reconnect, afterLost}: connected. `reconnect` is false only for the first connection;
+ *              `afterLost` is true if 'lost' was emitted during the outage that just ended.
+ *  - 'lost'    {}: the connection has been down for longer than the grace period (emitted once per outage)
+ *  - 'message' {data}, 'close' {code, reason}, 'error' (Error)
  */
 export default class DreoWebSocket {
   private ws?: WebSocket;
@@ -35,6 +45,9 @@ export default class DreoWebSocket {
   private reconnectTimer?: NodeJS.Timeout;
   private pongTimer?: NodeJS.Timeout;
   private connectTimer?: NodeJS.Timeout;
+  private lostTimer?: NodeJS.Timeout;
+  private hasOpened = false;
+  private lost = false;
   private attempt = 0;
   private stopped = false;
   // Only enforce the pong timeout if the server has actually answered a ping at least once
@@ -44,6 +57,7 @@ export default class DreoWebSocket {
   private readonly connectTimeout: number;
   private readonly minReconnectDelay: number;
   private readonly maxReconnectDelay: number;
+  private readonly lostGracePeriod: number;
 
   // getUrl is called before every connection attempt so the token and timestamp are always current
   constructor(
@@ -56,6 +70,7 @@ export default class DreoWebSocket {
     this.connectTimeout = options.connectTimeout ?? CONNECT_TIMEOUT;
     this.minReconnectDelay = options.minReconnectDelay ?? MIN_RECONNECT_DELAY;
     this.maxReconnectDelay = options.maxReconnectDelay ?? MAX_RECONNECT_DELAY;
+    this.lostGracePeriod = options.lostGracePeriod ?? LOST_GRACE_PERIOD;
   }
 
   public start() {
@@ -70,6 +85,8 @@ export default class DreoWebSocket {
     this.reconnectTimer = undefined;
     this.clearTimer(this.connectTimer);
     this.connectTimer = undefined;
+    this.clearTimer(this.lostTimer);
+    this.lostTimer = undefined;
     this.stopKeepalive();
     this.ws?.close();
     this.ws = undefined;
@@ -83,6 +100,11 @@ export default class DreoWebSocket {
     } else {
       this.listeners.set(event, new Set([listener]));
     }
+  }
+
+  // Deliver a locally generated message to listeners as if it came from the server
+  public dispatchMessage(data: string) {
+    this.emit('message', {data: data});
   }
 
   public send(data: string) {
@@ -130,9 +152,14 @@ export default class DreoWebSocket {
       this.attempt = 0;
       this.clearTimer(this.connectTimer);
       this.connectTimer = undefined;
+      this.clearTimer(this.lostTimer);
+      this.lostTimer = undefined;
       this.log.debug('WebSocket Opened');
       this.startKeepalive();
-      this.emit('open', {});
+      const event = {reconnect: this.hasOpened || this.lost, afterLost: this.lost};
+      this.hasOpened = true;
+      this.lost = false;
+      this.emit('open', event);
     });
 
     ws.on('message', (raw) => {
@@ -164,6 +191,7 @@ export default class DreoWebSocket {
     if (this.stopped || this.reconnectTimer) {
       return;
     }
+    this.startLostTimer();
 
     // Exponential backoff, half-jittered so every plugin instance doesn't retry in lockstep
     const backoff = Math.min(this.maxReconnectDelay, this.minReconnectDelay * Math.pow(2, this.attempt));
@@ -175,6 +203,19 @@ export default class DreoWebSocket {
       this.reconnectTimer = undefined;
       this.connect();
     }, delay);
+  }
+
+  // Every path to a reconnect passes through scheduleReconnect, so this starts on any outage
+  private startLostTimer() {
+    if (this.lost || this.lostTimer) {
+      return;
+    }
+    this.lostTimer = setTimeout(() => {
+      this.lostTimer = undefined;
+      this.lost = true;
+      this.log.debug('WebSocket down for %dms, reporting connection lost', this.lostGracePeriod);
+      this.emit('lost', {});
+    }, this.lostGracePeriod);
   }
 
   private startKeepalive() {
