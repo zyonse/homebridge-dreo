@@ -2,11 +2,21 @@ import { Service, PlatformAccessory} from 'homebridge';
 import { DreoPlatform } from '../platform';
 import { BaseAccessory } from './BaseAccessory';
 
+const HEATER_COMMAND_WINDOW_MS = 1500;
+
 /**
  * Heater Accessory
  */
 export class HeaterAccessory extends BaseAccessory {
+  private static readonly lastTemperatureWrite = new WeakMap<DreoPlatform, number>();
+  private static readonly pendingStarts = new WeakMap<DreoPlatform, Set<HeaterAccessory>>();
   private service: Service;
+  private readonly guardHeaterPower: boolean;
+  private readonly hideHeaterAutoMode: boolean;
+  private pendingPowerOn?: ReturnType<typeof setTimeout>;
+  private shuttingOff = false;
+  private sentEcoSetpoint?: number;
+  private fanOnlyRequested = false;
 
   // Cached copy of latest device states
   private on: boolean;
@@ -49,6 +59,8 @@ export class HeaterAccessory extends BaseAccessory {
   ) {
     // Call base class constructor
     super(platform, accessory, state);
+    this.guardHeaterPower = platform.config.ignoreHeaterPowerOnWithTemperature === true;
+    this.hideHeaterAutoMode = platform.config.hideHeaterAutoMode === true;
 
     // Update current state in homebridge from Dreo API
     this.temperature = this.convertToCelsius(state.temperature.state);
@@ -94,12 +106,7 @@ export class HeaterAccessory extends BaseAccessory {
       this.tempUnit = false;
     }
 
-    // Similar logic to updateHeaterState()
-    if (this.mode === 'coolair') {
-      this.currState = 3;
-    } else {
-      this.currState = Number(this.ptcon) + Number(this.on);
-    }
+    this.currState = this.getReportedHeaterState();
 
     // Get the HeaterCooler service if it exists, otherwise create a new HeaterCooler service
     this.service = this.accessory.getService(this.platform.Service.HeaterCooler) ||
@@ -123,13 +130,17 @@ export class HeaterAccessory extends BaseAccessory {
     * 1: Heat (Dreo eco mode)
     * 2: Cool (Dreo fan only mode)
     */
-    this.service.getCharacteristic(this.platform.Characteristic.TargetHeaterCoolerState)
+    const targetMode = this.service.getCharacteristic(this.platform.Characteristic.TargetHeaterCoolerState);
+    if (this.hideHeaterAutoMode) {
+      targetMode.updateValue(this.getTargetHeaterCoolerState());
+    }
+    targetMode
       .onSet(this.whenOnline(this.setTargetHeaterCoolerState))
       .onGet(this.whenOnline(this.getTargetHeaterCoolerState))
       .setProps({  // We can disable modes by limiting these values
-        minValue: 0,
+        minValue: this.hideHeaterAutoMode ? 1 : 0,
         maxValue: 2,
-        validValues: [0, 1, 2],
+        validValues: this.hideHeaterAutoMode ? [1, 2] : [0, 1, 2],
       });
 
     // Register handlers for Current Temperature characteristic
@@ -156,10 +167,11 @@ export class HeaterAccessory extends BaseAccessory {
     this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature)
       .onSet(this.whenOnline(this.setCoolingThresholdTemperature))
       .onGet(this.whenOnline(this.getCoolingThresholdTemperature))
-      .setProps({  // Only allow single value for cooling mode
-        minValue: this.minTemp + 8,
-        maxValue: this.minTemp + 8,
-        validValues: [this.minTemp + 8],
+      .setProps({
+        minValue: this.minTemp,
+        maxValue: this.convertToCelsius(ecoRange.endValue),
+        minStep: 0.5,
+        validValues: null,
       });
 
     // Register handlers for Lock Physical Controls
@@ -201,13 +213,26 @@ export class HeaterAccessory extends BaseAccessory {
       if (data.devicesn === accessory.context.device.sn) {
         platform.log.debug('Incoming %s', message.data);
 
+        if (!this.online) {
+          this.cancelPendingPowerOn();
+        }
+        if (!this.online || data.method === 'device-online') {
+          this.sentEcoSetpoint = undefined;
+        }
+
         // Check if we need to update fan state in homekit
         if (data.method === 'control-report' || data.method === 'control-reply' || data.method === 'report' ||
           data.method === 'device-online') {
           Object.keys(data.reported).forEach(key => {
             switch(key) {
               case 'poweron':
+                if (this.guardHeaterPower && data.method === 'control-reply') {
+                  break;
+                }
                 this.on = data.reported.poweron;
+                if (!this.on) {
+                  this.shuttingOff = false;
+                }
                 this.service.getCharacteristic(this.platform.Characteristic.Active)
                   .updateValue(this.on);
                 this.platform.log.debug('Heater power:', data.reported.poweron);
@@ -216,6 +241,12 @@ export class HeaterAccessory extends BaseAccessory {
                 break;
               case 'mode':
                 this.mode = data.reported.mode;
+                if (this.mode === 'coolair' && data.method !== 'control-reply') {
+                  this.fanOnlyRequested = false;
+                }
+                if (this.hideHeaterAutoMode) {
+                  targetMode.updateValue(this.getTargetHeaterCoolerState());
+                }
                 this.platform.log.debug('Heater mode:', data.reported.mode);
                 // Swap to custom thermostat mode if in 'hotair' mode
                 this.updateThermostatTemp();
@@ -235,9 +266,19 @@ export class HeaterAccessory extends BaseAccessory {
                 this.platform.log.debug('Heater temperature:', data.reported.temperature);
                 break;
               case 'ecolevel':
+                if (this.guardHeaterPower && data.method === 'control-reply') {
+                  break;
+                }
                 this.targetTemperature = this.convertToCelsius(data.reported.ecolevel);
+                if (data.reported.ecolevel === this.sentEcoSetpoint) {
+                  this.sentEcoSetpoint = undefined;
+                }
                 this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature)
-                  .updateValue(this.targetTemperature);
+                  .updateValue(this.guardHeaterPower ? this.getHeatingThresholdTemperature() : this.targetTemperature);
+                if (this.mode === 'eco') {
+                  this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature)
+                    .updateValue(this.getCoolingThresholdTemperature());
+                }
                 this.platform.log.debug('Heater target temperature:', data.reported.ecolevel);
                 break;
               case 'ptcon':
@@ -279,19 +320,72 @@ export class HeaterAccessory extends BaseAccessory {
                 this.platform.log.debug('Unknown command received:', key);
             }
           });
+          this.applySavedEcoSetpoint();
         }
       }
     });
+    this.applySavedEcoSetpoint();
   }
 
   // Handle requests to set the "Active" characteristic
   setActive(value) {
     this.platform.log.debug('Triggered SET Active:', value);
+    if (this.guardHeaterPower) {
+      if (!value) {
+        this.cancelPendingPowerOn();
+        this.shuttingOff = true;
+        this.platform.webHelper.control(this.sn, {'poweron': false});
+      } else if ((!this.on || this.shuttingOff) && !this.pendingPowerOn) {
+        if (this.hasRecentTemperatureWrite()) {
+          this.publishConfirmedOff();
+        } else {
+          this.holdPowerOn();
+        }
+      }
+      return;
+    }
     // Check state to prevent duplicate requests
     if (this.on !== Boolean(value)) {
       // Send to Dreo server via websocket
       this.platform.webHelper.control(this.sn, {'poweron': Boolean(value)});
     }
+  }
+
+  private holdPowerOn() {
+    let pending = HeaterAccessory.pendingStarts.get(this.platform);
+    if (!pending) {
+      pending = new Set();
+      HeaterAccessory.pendingStarts.set(this.platform, pending);
+    }
+    pending.add(this);
+    this.pendingPowerOn = setTimeout(() => {
+      this.cancelPendingPowerOn();
+      if (this.online && (!this.on || this.shuttingOff)) {
+        this.platform.webHelper.control(this.sn, {'poweron': true});
+      }
+    }, HEATER_COMMAND_WINDOW_MS);
+  }
+
+  private cancelPendingPowerOn() {
+    if (this.pendingPowerOn !== undefined) {
+      clearTimeout(this.pendingPowerOn);
+      this.pendingPowerOn = undefined;
+      HeaterAccessory.pendingStarts.get(this.platform)?.delete(this);
+    }
+  }
+
+  private publishConfirmedOff() {
+    // HomeKit caches the requested value after the write handler finishes.
+    setImmediate(() => {
+      if (this.online && !this.on && !this.pendingPowerOn) {
+        this.service.getCharacteristic(this.platform.Characteristic.Active).updateValue(false);
+      }
+    });
+  }
+
+  private hasRecentTemperatureWrite() {
+    const last = HeaterAccessory.lastTemperatureWrite.get(this.platform);
+    return last !== undefined && performance.now() - last <= HEATER_COMMAND_WINDOW_MS;
   }
 
   // Handle requests to get the current value of the "Active" characteristic
@@ -309,22 +403,22 @@ export class HeaterAccessory extends BaseAccessory {
   setTargetHeaterCoolerState(value) {
     this.platform.log.debug('Triggered SET TargetHeaterCoolerState:', value);
     if (value === 1) {
+      this.fanOnlyRequested = false;
       this.platform.webHelper.control(this.sn, {'mode': 'eco'});
     } else if (value === 2) {
+      this.fanOnlyRequested = true;
       this.platform.webHelper.control(this.sn, {'mode': 'coolair'});
-    } else if (value === 0) {
+    } else if (value === 0 && !this.hideHeaterAutoMode) {
+      this.fanOnlyRequested = false;
       this.platform.webHelper.control(this.sn, {'mode': 'hotair'});
     }
   }
 
   getTargetHeaterCoolerState() {
-    if (this.mode === 'eco') {
-      return 1;
-    } else if (this.mode === 'coolair') {
+    if (this.mode === 'coolair') {
       return 2;
-    } else {
-      return 0;
     }
+    return this.mode === 'eco' || this.hideHeaterAutoMode ? 1 : 0;
   }
 
   // Handle requests for Current Temperature
@@ -334,9 +428,23 @@ export class HeaterAccessory extends BaseAccessory {
 
   // Handle requests for Heating Threshold Temperature
   setHeatingThresholdTemperature(value) {
+    if (this.isFanOnlyTarget()) {
+      this.setCoolingThresholdTemperature(value);
+      return;
+    }
+    if (this.guardHeaterPower) {
+      this.recordTemperatureWrite();
+      if (!this.on || this.shuttingOff ||
+        (this.mode === 'eco' && this.accessory.context.savedHeaterEcoSetpoint !== undefined)) {
+        this.accessory.context.savedHeaterEcoSetpoint = this.convertToFahrenheit(value);
+        this.platform.api.updatePlatformAccessories([this.accessory]);
+        this.applySavedEcoSetpoint();
+        return;
+      }
+    }
     if (this.mode === 'eco') {
       this.platform.webHelper.control(this.sn, {'ecolevel': this.convertToFahrenheit(value)});
-    } else {
+    } else if (!this.hideHeaterAutoMode) {
       /**
        * Dreo uses a fixed range of 1-3 for heat level
        * We'll map the bottom 3 degree increments of the fan to these levels
@@ -349,21 +457,74 @@ export class HeaterAccessory extends BaseAccessory {
   }
 
   getHeatingThresholdTemperature() {
-    if (this.mode === 'eco') {
+    if (this.isFanOnlyTarget()) {
+      return this.getCoolingThresholdTemperature();
+    }
+    const saved = this.accessory.context.savedHeaterEcoSetpoint;
+    if (this.guardHeaterPower && Number.isFinite(saved) && (!this.on || this.shuttingOff || this.mode === 'eco')) {
+      return this.convertToCelsius(saved);
+    }
+    if (this.mode === 'eco' || this.hideHeaterAutoMode) {
       return this.targetTemperature;
     } else {
       return ((this.heatLevel - 1) / 2) + this.minTemp;
     }
   }
 
-  // Handle requests for Cooling Threshold Temperature
-  // We're just using the 'cooling' mode to control fan only mode so the temperature is hardcoded to 0
-  setCoolingThresholdTemperature() {
-    return;
+  private applySavedEcoSetpoint() {
+    if (!this.guardHeaterPower) {
+      return;
+    }
+    if (!this.online || !this.on || this.shuttingOff || this.mode !== 'eco' || this.fanOnlyRequested) {
+      this.sentEcoSetpoint = undefined;
+      return;
+    }
+    const saved = this.accessory.context.savedHeaterEcoSetpoint;
+    if (!Number.isFinite(saved) || this.sentEcoSetpoint !== undefined) {
+      return;
+    }
+    if (saved === this.convertToFahrenheit(this.targetTemperature)) {
+      delete this.accessory.context.savedHeaterEcoSetpoint;
+      this.platform.api.updatePlatformAccessories([this.accessory]);
+      return;
+    }
+    this.sentEcoSetpoint = saved;
+    this.platform.webHelper.control(this.sn, {'ecolevel': saved});
+  }
+
+  private recordTemperatureWrite() {
+    HeaterAccessory.lastTemperatureWrite.set(this.platform, performance.now());
+    HeaterAccessory.pendingStarts.get(this.platform)?.forEach(heater => {
+      heater.cancelPendingPowerOn();
+      heater.publishConfirmedOff();
+    });
+  }
+
+  // Dreo fan-only mode has no hardware setpoint. Keep the HomeKit target locally.
+  setCoolingThresholdTemperature(value) {
+    if (this.mode === 'eco' && !this.fanOnlyRequested) {
+      this.setHeatingThresholdTemperature(value);
+      return;
+    }
+    if (this.guardHeaterPower) {
+      this.recordTemperatureWrite();
+    }
+    if (value !== this.accessory.context.fanOnlyTargetTemperature) {
+      this.accessory.context.fanOnlyTargetTemperature = value;
+      this.platform.api.updatePlatformAccessories([this.accessory]);
+    }
   }
 
   getCoolingThresholdTemperature() {
-    return this.minTemp + 8;
+    if (this.mode === 'eco' && !this.fanOnlyRequested) {
+      return this.getHeatingThresholdTemperature();
+    }
+    const target = this.accessory.context.fanOnlyTargetTemperature;
+    return Number.isFinite(target) ? target : this.minTemp + 8;
+  }
+
+  private isFanOnlyTarget() {
+    return this.mode === 'coolair' || this.fanOnlyRequested;
   }
 
   // Turn child lock on/off
@@ -414,17 +575,25 @@ export class HeaterAccessory extends BaseAccessory {
 
   // Helper function that determines heater state for HomeKit based on Dreo values
   updateHeaterState() {
-    if (this.mode === 'coolair') {
-      this.currState = 3;
-    } else {
-      this.currState = Number(this.ptcon) + Number(this.on);
-    }
+    this.currState = this.getReportedHeaterState();
     this.service.getCharacteristic(this.platform.Characteristic.CurrentHeaterCoolerState)
       .updateValue(this.currState);
   }
 
+  private getReportedHeaterState() {
+    if (this.mode === 'coolair') {
+      return 3;
+    }
+    return Number(this.ptcon) + Number(this.on);
+  }
+
   updateThermostatTemp() {
-    if (this.mode === 'eco') {
+    this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature)
+      .updateValue(this.getCoolingThresholdTemperature());
+    if (this.hideHeaterAutoMode || this.mode === 'coolair') {
+      this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature)
+        .updateValue(this.getHeatingThresholdTemperature());
+    } else if (this.mode === 'eco') {
       this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature)
         .updateValue(this.targetTemperature);
     } else if (this.mode === 'hotair') {

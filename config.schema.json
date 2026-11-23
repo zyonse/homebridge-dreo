@@ -35,6 +35,18 @@
           }
         }
       },
+      "hideHeaterAutoMode": {
+        "title": "Hide Heater Auto Mode",
+        "type": "boolean",
+        "default": false,
+        "description": "Hides Auto and disables fixed heat-level control in HomeKit. Heat still selects Eco and Cool still selects fan-only."
+      },
+      "ignoreHeaterPowerOnWithTemperature": {
+        "title": "Ignore Heater Power-On With Temperature Changes",
+        "type": "boolean",
+        "default": false,
+        "description": "Saves temperature changes while a heater is off and suppresses power-on requests near a heater temperature write."
+      },
       "hideTemperatureSensor": {
         "title": "Hide Fan Temperature Sensor",
         "type": "boolean",
@@ -61,6 +73,8 @@
         "options.password"
       ]
     },
+    "hideHeaterAutoMode",
+    "ignoreHeaterPowerOnWithTemperature",
     {
       "type": "fieldset",
       "title": "Temperature Sensor",

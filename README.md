@@ -76,13 +76,17 @@ Devices that Dreo reports as offline (unplugged, or disconnected from WiFi) show
 #### Heaters are displayed as a thermostat accessory with the following control mappings
 
 * **Heat Mode:** Controls Dreo 'Eco' mode
-* **Cool Mode:** Controls Dreo 'Fan Only' mode
+* **Cool Mode:** Controls Dreo 'Fan Only' mode. Homebridge saves its target for Apple Home. The fan runs independently of the target.
 * **Auto Mode:** Controls Dreo 'Heat' speeds, represented as an offset from the minimum temperature (for example, a heater with speeds 1-3 and a minimum temp of 41F can be controlled by setting temperature to 41, 42, 43)
 * **Current Temperature:** Displays current temperature sensor reading
 * **Fan Speed:** Controls heater vent angle
 * **Oscillate:** Toggles heater vent oscillation
 * **Child Lock:** Lock physical heater controls
 * **Hardware Display:** Changes temperature unit on physical hardware display
+
+Temperature requests follow the selected mode. In Heat (Eco), either HomeKit temperature control sets the Eco target. In Cool (Fan Only), either control saves a local target without changing the operating mode. Enable **Hide Heater Auto Mode** (`hideHeaterAutoMode`) to remove Auto and disable fixed heat-level control from HomeKit. Fixed heat remains available in the Dreo app.
+
+Enable **Ignore Heater Power-On With Temperature Changes** (`ignoreHeaterPowerOnWithTemperature`) to save setpoint writes while a heater is off. Homebridge sends the latest saved setpoint when Dreo confirms the heater is on in Eco mode. A power-on write waits 1.5 seconds. A temperature write to any heater on the same Dreo platform within 1.5 seconds before or after the power-on write suppresses it. A power-on write by itself still turns the heater on, including when Siri sends one by itself.
 
 ### Humidifiers
 
