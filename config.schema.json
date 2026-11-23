@@ -73,8 +73,14 @@
         "options.password"
       ]
     },
-    "hideHeaterAutoMode",
-    "ignoreHeaterPowerOnWithTemperature",
+    {
+      "type": "fieldset",
+      "title": "Heaters",
+      "items": [
+        "hideHeaterAutoMode",
+        "ignoreHeaterPowerOnWithTemperature"
+      ]
+    },
     {
       "type": "fieldset",
       "title": "Temperature Sensor",
