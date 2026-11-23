@@ -35,6 +35,12 @@
           }
         }
       },
+      "accessoryDiagnosticLogging": {
+        "title": "Accessory Diagnostic Logging",
+        "type": "boolean",
+        "default": false,
+        "description": "Logs HomeKit writes, Dreo control commands, and related reports for all supported accessory types at info level."
+      },
       "hideTemperatureSensor": {
         "title": "Hide Fan Temperature Sensor",
         "type": "boolean",
@@ -59,6 +65,13 @@
       "items": [
         "options.email",
         "options.password"
+      ]
+    },
+    {
+      "type": "fieldset",
+      "title": "Logging",
+      "items": [
+        "accessoryDiagnosticLogging"
       ]
     },
     {

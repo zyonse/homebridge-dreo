@@ -1,6 +1,13 @@
 import { PlatformAccessory } from 'homebridge';
 import { DreoPlatform } from '../platform';
 
+const DIAGNOSTIC_FIELDS = new Set([
+  'poweron', 'fanon', 'mode', 'windlevel', 'shakehorizon', 'hoscon', 'oscmode',
+  'oscon', 'oscangle', 'lighton', 'brightness', 'childlockon', 'temperature', 'tempunit',
+  'ecolevel', 'htalevel', 'ptcon', 'rh', 'rhautolevel', 'rhsleeplevel', 'foglevel',
+  'hotfogon', 'suspend', 'wrong', 'filtertime', 'connected',
+]);
+
 interface DreoDevice {
   brand: string;
   model: string;
@@ -37,6 +44,17 @@ export abstract class BaseAccessory {
       if (data?.devicesn !== this.sn) {
         return;
       }
+      if (this.platform.config.accessoryDiagnosticLogging === true) {
+        switch (data.method) {
+          case 'control-reply':
+          case 'control-report':
+          case 'report':
+          case 'device-online':
+          case 'device-offline':
+            this.logDiagnostic(`Dreo ${data.method}`, this.diagnosticFields(data.reported));
+            break;
+        }
+      }
       // Dreo sends 'device-offline' with an empty payload, and 'device-online' with a full state
       // snapshot (including connected: true). Other reports may also carry the connected flag.
       if (data.method === 'device-offline') {
@@ -63,6 +81,32 @@ export abstract class BaseAccessory {
       }
       return handler.apply(this, args);
     };
+  }
+
+  protected whenOnlineWrite<A extends unknown[], R>(handler: (...args: A) => R): (...args: A) => R {
+    return this.whenOnline((...args: A) => {
+      if (this.platform.config.accessoryDiagnosticLogging === true) {
+        this.logDiagnostic(`HomeKit ${handler.name}`, args[0]);
+      }
+      return handler.apply(this, args);
+    });
+  }
+
+  protected control(command: Record<string, unknown>) {
+    if (this.platform.config.accessoryDiagnosticLogging === true) {
+      this.logDiagnostic('Dreo command', this.diagnosticFields(command));
+    }
+    this.platform.webHelper.control(this.sn, command);
+  }
+
+  private diagnosticFields(fields?: Record<string, unknown>) {
+    const safeFields = Object.entries(fields ?? {}).filter(([key, value]) =>
+      DIAGNOSTIC_FIELDS.has(key) && ['number', 'boolean', 'string'].includes(typeof value));
+    return JSON.stringify(Object.fromEntries(safeFields));
+  }
+
+  private logDiagnostic(event: string, value: unknown) {
+    this.platform.log.info('Accessory diagnostics [%s] %s: %s', this.accessory.displayName, event, value);
   }
 
   private communicationFailure() {

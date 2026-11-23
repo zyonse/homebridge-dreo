@@ -110,7 +110,7 @@ export class HeaterAccessory extends BaseAccessory {
 
     // Register handlers for the Active characteristic
     this.service.getCharacteristic(this.platform.Characteristic.Active)
-      .onSet(this.whenOnline(this.setActive))
+      .onSet(this.whenOnlineWrite(this.setActive))
       .onGet(this.whenOnline(this.getActive));
 
     // Register handlers for Current Heater-Cooler State
@@ -124,7 +124,7 @@ export class HeaterAccessory extends BaseAccessory {
     * 2: Cool (Dreo fan only mode)
     */
     this.service.getCharacteristic(this.platform.Characteristic.TargetHeaterCoolerState)
-      .onSet(this.whenOnline(this.setTargetHeaterCoolerState))
+      .onSet(this.whenOnlineWrite(this.setTargetHeaterCoolerState))
       .onGet(this.whenOnline(this.getTargetHeaterCoolerState))
       .setProps({  // We can disable modes by limiting these values
         minValue: 0,
@@ -144,7 +144,7 @@ export class HeaterAccessory extends BaseAccessory {
     }
     this.minTemp = this.convertToCelsius(ecoRange.startValue);
     this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature)
-      .onSet(this.whenOnline(this.setHeatingThresholdTemperature))
+      .onSet(this.whenOnlineWrite(this.setHeatingThresholdTemperature))
       .onGet(this.whenOnline(this.getHeatingThresholdTemperature))
       .setProps({
         minValue: this.minTemp,
@@ -154,7 +154,7 @@ export class HeaterAccessory extends BaseAccessory {
 
     // Register handlers for Cooling Threshold Temperature
     this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature)
-      .onSet(this.whenOnline(this.setCoolingThresholdTemperature))
+      .onSet(this.whenOnlineWrite(this.setCoolingThresholdTemperature))
       .onGet(this.whenOnline(this.getCoolingThresholdTemperature))
       .setProps({  // Only allow single value for cooling mode
         minValue: this.minTemp + 8,
@@ -164,14 +164,14 @@ export class HeaterAccessory extends BaseAccessory {
 
     // Register handlers for Lock Physical Controls
     this.service.getCharacteristic(this.platform.Characteristic.LockPhysicalControls)
-      .onSet(this.whenOnline(this.setLockPhysicalControls))
+      .onSet(this.whenOnlineWrite(this.setLockPhysicalControls))
       .onGet(this.whenOnline(this.getLockPhysicalControls));
 
     // Rotation speed (used to set oscillation angle)
     // Only show this if the fan supports setting specific oscillation angles
     if (this.canSetAngle) {
       this.service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
-        .onSet(this.whenOnline(this.setRotationSpeed))
+        .onSet(this.whenOnlineWrite(this.setRotationSpeed))
         .onGet(this.whenOnline(this.getRotationSpeed))
         .setProps({
           minStep: 50,
@@ -181,14 +181,14 @@ export class HeaterAccessory extends BaseAccessory {
     // Temperature display units
     if (this.canSetTempUnit) {
       this.service.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits)
-        .onSet(this.whenOnline(this.setTemperatureDisplayUnits))
+        .onSet(this.whenOnlineWrite(this.setTemperatureDisplayUnits))
         .onGet(this.whenOnline(this.getTemperatureDisplayUnits));
     }
 
     // Swing mode
     if (this.canSwing) {
       this.service.getCharacteristic(this.platform.Characteristic.SwingMode)
-        .onSet(this.whenOnline(this.setSwingMode))
+        .onSet(this.whenOnlineWrite(this.setSwingMode))
         .onGet(this.whenOnline(this.getSwingMode));
     }
 
@@ -290,7 +290,7 @@ export class HeaterAccessory extends BaseAccessory {
     // Check state to prevent duplicate requests
     if (this.on !== Boolean(value)) {
       // Send to Dreo server via websocket
-      this.platform.webHelper.control(this.sn, {'poweron': Boolean(value)});
+      this.control({'poweron': Boolean(value)});
     }
   }
 
@@ -309,11 +309,11 @@ export class HeaterAccessory extends BaseAccessory {
   setTargetHeaterCoolerState(value) {
     this.platform.log.debug('Triggered SET TargetHeaterCoolerState:', value);
     if (value === 1) {
-      this.platform.webHelper.control(this.sn, {'mode': 'eco'});
+      this.control({'mode': 'eco'});
     } else if (value === 2) {
-      this.platform.webHelper.control(this.sn, {'mode': 'coolair'});
+      this.control({'mode': 'coolair'});
     } else if (value === 0) {
-      this.platform.webHelper.control(this.sn, {'mode': 'hotair'});
+      this.control({'mode': 'hotair'});
     }
   }
 
@@ -335,7 +335,7 @@ export class HeaterAccessory extends BaseAccessory {
   // Handle requests for Heating Threshold Temperature
   setHeatingThresholdTemperature(value) {
     if (this.mode === 'eco') {
-      this.platform.webHelper.control(this.sn, {'ecolevel': this.convertToFahrenheit(value)});
+      this.control({'ecolevel': this.convertToFahrenheit(value)});
     } else {
       /**
        * Dreo uses a fixed range of 1-3 for heat level
@@ -344,7 +344,7 @@ export class HeaterAccessory extends BaseAccessory {
        */
       value = ((value - this.minTemp) * 2) + 1;
       value = Math.min(value, 3);  // Ensure speed is within range
-      this.platform.webHelper.control(this.sn, {'htalevel': value});
+      this.control({'htalevel': value});
     }
   }
 
@@ -368,7 +368,7 @@ export class HeaterAccessory extends BaseAccessory {
 
   // Turn child lock on/off
   setLockPhysicalControls(value) {
-    this.platform.webHelper.control(this.sn, {'childlockon': Boolean(value)});
+    this.control({'childlockon': Boolean(value)});
   }
 
   getLockPhysicalControls() {
@@ -377,7 +377,7 @@ export class HeaterAccessory extends BaseAccessory {
 
   // Handle requests for Rotation Speed
   setRotationSpeed(value) {
-    this.platform.webHelper.control(this.sn, {'oscangle': this.oscMap[value]});
+    this.control({'oscangle': this.oscMap[value]});
   }
 
   getRotationSpeed() {
@@ -386,7 +386,7 @@ export class HeaterAccessory extends BaseAccessory {
 
   // Handle requests for Temperature Display Units
   setTemperatureDisplayUnits(value) {
-    this.platform.webHelper.control(this.sn, {'tempunit': value === 1 ? 1 : 2});
+    this.control({'tempunit': value === 1 ? 1 : 2});
   }
 
   getTemperatureDisplayUnits() {
@@ -398,13 +398,13 @@ export class HeaterAccessory extends BaseAccessory {
     if (this.canSetAngle) {
       // If fan supports setting specific angles, we need to set angle to 0 for oscillation mode
       if (value === 1) {
-        this.platform.webHelper.control(this.sn, {'oscangle': 0});
+        this.control({'oscangle': 0});
       } else {
-        this.platform.webHelper.control(this.sn, {'oscangle': this.oscMap[this.oscAngle]});
+        this.control({'oscangle': this.oscMap[this.oscAngle]});
       }
     } else {
       // Fan only supports on/off oscillation toggle
-      this.platform.webHelper.control(this.sn, {'oscon': value});
+      this.control({'oscon': value});
     }
   }
 

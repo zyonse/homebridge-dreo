@@ -99,7 +99,7 @@ export class FanAccessory extends BaseAccessory {
     // Register handlers for the Active Characteristic
     this.service
       .getCharacteristic(this.platform.Characteristic.Active)
-      .onSet(this.whenOnline(this.setActive))
+      .onSet(this.whenOnlineWrite(this.setActive))
       .onGet(this.whenOnline(this.getActive));
 
     // Register handlers for the RotationSpeed Characteristic
@@ -109,7 +109,7 @@ export class FanAccessory extends BaseAccessory {
         // Setting minStep defines fan speed steps in HomeKit
         minStep: 100 / this.currState.maxSpeed,
       })
-      .onSet(this.whenOnline(this.setRotationSpeed))
+      .onSet(this.whenOnlineWrite(this.setRotationSpeed))
       .onGet(this.whenOnline(this.getRotationSpeed));
 
     // Check whether fan supports oscillation. First try the API controlsConf, then
@@ -125,7 +125,7 @@ export class FanAccessory extends BaseAccessory {
       // Register handlers for Swing Mode (oscillation)
       this.service
         .getCharacteristic(this.platform.Characteristic.SwingMode)
-        .onSet(this.whenOnline(this.setSwingMode))
+        .onSet(this.whenOnlineWrite(this.setSwingMode))
         .onGet(this.whenOnline(this.getSwingMode));
       this.currState.swing = Boolean(state[this.currState.swingCMD]?.state ?? false);
     }
@@ -135,7 +135,7 @@ export class FanAccessory extends BaseAccessory {
       // Register handlers for Target Fan State
       this.service
         .getCharacteristic(this.platform.Characteristic.TargetFanState)
-        .onSet(this.whenOnline(this.setMode))
+        .onSet(this.whenOnlineWrite(this.setMode))
         .onGet(this.whenOnline(this.getMode));
       this.currState.autoMode = this.convertModeToBoolean(state.mode.state);
     }
@@ -145,7 +145,7 @@ export class FanAccessory extends BaseAccessory {
       // Register handlers for Lock Physical Controls
       this.service
         .getCharacteristic(this.platform.Characteristic.LockPhysicalControls)
-        .onSet(this.whenOnline(this.setLockPhysicalControls))
+        .onSet(this.whenOnlineWrite(this.setLockPhysicalControls))
         .onGet(this.whenOnline(this.getLockPhysicalControls));
       this.currState.lockPhysicalControls = Boolean(state.childlockon.state);
     }
@@ -201,12 +201,12 @@ export class FanAccessory extends BaseAccessory {
 
       this.lightService
         .getCharacteristic(this.platform.Characteristic.On)
-        .onSet(this.whenOnline(this.setLightOn))
+        .onSet(this.whenOnlineWrite(this.setLightOn))
         .onGet(this.whenOnline(this.getLightOn));
 
       this.lightService
         .getCharacteristic(this.platform.Characteristic.Brightness)
-        .onSet(this.whenOnline(this.setBrightness))
+        .onSet(this.whenOnlineWrite(this.setBrightness))
         .onGet(this.whenOnline(this.getBrightness));
     }
 
@@ -358,7 +358,7 @@ export class FanAccessory extends BaseAccessory {
     // Check state to prevent duplicate requests
     if (this.currState.on !== Boolean(value)) {
       // Send to Dreo server via websocket
-      this.platform.webHelper.control(this.sn, {
+      this.control({
         [this.currState.powerCMD]: Boolean(value),
       });
     }
@@ -377,7 +377,7 @@ export class FanAccessory extends BaseAccessory {
     if (converted !== 0) {
       this.platform.log.debug('Setting fan speed:', converted);
       // Setting power state to true ensures the fan is actually on
-      this.platform.webHelper.control(this.sn, {
+      this.control({
         [this.currState.powerCMD]: true,
         windlevel: converted,
       });
@@ -390,7 +390,7 @@ export class FanAccessory extends BaseAccessory {
 
   // Turn oscillation on/off
   async setSwingMode(value) {
-    this.platform.webHelper.control(this.sn, {
+    this.control({
       [this.currState.swingCMD]:
         this.currState.swingCMD === 'oscmode' ? Number(value) : Boolean(value),
     });
@@ -402,7 +402,7 @@ export class FanAccessory extends BaseAccessory {
 
   // Set fan mode
   async setMode(value) {
-    this.platform.webHelper.control(this.sn, {
+    this.control({
       mode: value === this.platform.Characteristic.TargetFanState.AUTO ? 4 : 1,
     });
   }
@@ -413,7 +413,7 @@ export class FanAccessory extends BaseAccessory {
 
   // Turn child lock on/off
   async setLockPhysicalControls(value) {
-    this.platform.webHelper.control(this.sn, { childlockon: Number(value) });
+    this.control({ childlockon: Number(value) });
   }
 
   getLockPhysicalControls() {
@@ -437,7 +437,7 @@ export class FanAccessory extends BaseAccessory {
 
   setLightOn(value: any) {
     this.platform.log.debug('Triggered SET Light On:', value);
-    this.platform.webHelper.control(this.sn, { lighton: Boolean(value) });
+    this.control({ lighton: Boolean(value) });
   }
 
   getLightOn() {
@@ -446,7 +446,7 @@ export class FanAccessory extends BaseAccessory {
 
   setBrightness(value) {
     this.platform.log.debug('Triggered SET Brightness:', value);
-    this.platform.webHelper.control(this.sn, { brightness: value });
+    this.control({ brightness: value });
   }
 
   getBrightness() {
