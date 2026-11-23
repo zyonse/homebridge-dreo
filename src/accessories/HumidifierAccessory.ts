@@ -116,16 +116,16 @@ export class HumidifierAccessory extends BaseAccessory {
     // Register handlers for the Humidifier Active characteristic
     this.humidifierService.getCharacteristic(this.platform.Characteristic.Active)
     .onGet(this.whenOnline(this.getActive))
-    .onSet(this.whenOnline(this.setActive));
+    .onSet(this.whenOnlineWrite(this.setActive));
     this.sleepSwitchService.getCharacteristic(this.platform.Characteristic.On)
     .onGet(this.whenOnline(this.getSleepMode))
-    .onSet(this.whenOnline(this.setSleepMode));
+    .onSet(this.whenOnlineWrite(this.setSleepMode));
 
     // Only register Hot Fog handlers if the service exists (device supports it)
     if (this.hotFogSwitchService) {
       this.hotFogSwitchService.getCharacteristic(this.platform.Characteristic.On)
       .onGet(this.whenOnline(this.getHotFog))
-      .onSet(this.whenOnline(this.setHotFog));
+      .onSet(this.whenOnlineWrite(this.setHotFog));
     }
 
     // Register handlers for Current Humidifier State characteristic
@@ -157,7 +157,7 @@ export class HumidifierAccessory extends BaseAccessory {
       validValues: [1], // Only humidifier mode - this makes HomeKit show just "Humidifier"
     })
     .onGet(this.whenOnline(this.getTargetHumidifierMode))
-    .onSet(this.whenOnline(this.setTargetHumidifierMode));
+    .onSet(this.whenOnlineWrite(this.setTargetHumidifierMode));
 
     // Set RelativeHumidityHumidifierThreshold
     // HomeKit range matches device capabilities (30-90%) for clearer user interface
@@ -169,7 +169,7 @@ export class HumidifierAccessory extends BaseAccessory {
       minStep: 1,
     })
     .onGet(this.whenOnline(this.getTargetHumidity))
-    .onSet(this.whenOnline(this.setTargetHumidity));
+    .onSet(this.whenOnlineWrite(this.setTargetHumidity));
 
     // Force an immediate update to ensure HomeKit uses the new properties for both characteristics
     setTimeout(() => {
@@ -197,7 +197,7 @@ export class HumidifierAccessory extends BaseAccessory {
       validValues: [0, 1, 2, 3, 4, 5, 6], // [0: off, 1-6: fog levels]
     })
     .onGet(this.whenOnline(this.getTargetFogLevel))
-    .onSet(this.whenOnline(this.setTargetFogLevel));
+    .onSet(this.whenOnlineWrite(this.setTargetFogLevel));
 
     // Update values from Dreo App
     platform.webHelper.addEventListener('message', (message: MessageEvent) => {
@@ -264,7 +264,7 @@ export class HumidifierAccessory extends BaseAccessory {
     // Check state to prevent duplicate requests
     if (this.on !== isActive) {
       // Send to Dreo server via websocket
-      this.platform.webHelper.control(this.sn, {'poweron': isActive});
+      this.control({'poweron': isActive});
     }
     // Update HomeKit state
     this.on = isActive;
@@ -300,7 +300,7 @@ export class HumidifierAccessory extends BaseAccessory {
         }, 750);
       }
     }
-    this.platform.webHelper.control(this.sn, command);
+    this.control(command);
   }
 
   getHotFog(): boolean {
@@ -323,7 +323,7 @@ export class HumidifierAccessory extends BaseAccessory {
       command = {'poweron': true, 'hotfogon': this.fogHot};
       this.humidifierService.updateCharacteristic(this.platform.Characteristic.Active, true);
     }
-    this.platform.webHelper.control(this.sn, command);
+    this.control(command);
   }
 
   getCurrentHumidifierState() {
@@ -369,11 +369,11 @@ export class HumidifierAccessory extends BaseAccessory {
     } else if (this.dreoMode === 1) { // auto
       this.targetHumAutoLevel = targetValue;
       this.platform.log.debug('Triggered SET TargetHumidity (Auto): %s', targetValue);
-      this.platform.webHelper.control(this.sn, {'rhautolevel': this.targetHumAutoLevel});
+      this.control({'rhautolevel': this.targetHumAutoLevel});
     } else if (this.dreoMode === 2) { // sleep
       this.targetHumSleepLevel = targetValue;
       this.platform.log.debug('Triggered SET TargetHumidity (Sleep): %s', targetValue);
-      this.platform.webHelper.control(this.sn, {'rhsleeplevel': this.targetHumSleepLevel});
+      this.control({'rhsleeplevel': this.targetHumSleepLevel});
     }
   }
 
@@ -407,15 +407,15 @@ export class HumidifierAccessory extends BaseAccessory {
     if (this.manualFogLevel === 0) { // If manual fog level is 0, turn off the humidifier
       this.on = false; // Turn off humidifier
       this.humidifierService.updateCharacteristic(this.platform.Characteristic.Active, false);
-      this.platform.webHelper.control(this.sn, {'poweron': this.on});
+      this.control({'poweron': this.on});
       return;
     }
     if (this.dreoMode === 0) { // manual
-      this.platform.webHelper.control(this.sn, {'foglevel': this.manualFogLevel});
+      this.control({'foglevel': this.manualFogLevel});
     } else {
       this.platform.log.warn('WARN: Switching to manual mode to set fog level. Current mode: %s', this.dreoMode);
       this.dreoMode = 0; // Set mode to manual
-      this.platform.webHelper.control(this.sn, {'mode': this.dreoMode, 'foglevel': this.manualFogLevel});
+      this.control({'mode': this.dreoMode, 'foglevel': this.manualFogLevel});
     }
   }
 

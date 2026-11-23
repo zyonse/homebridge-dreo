@@ -35,11 +35,11 @@
           }
         }
       },
-      "heaterDiagnosticLogging": {
-        "title": "Heater Diagnostic Logging",
+      "accessoryDiagnosticLogging": {
+        "title": "Accessory Diagnostic Logging",
         "type": "boolean",
         "default": false,
-        "description": "Logs HomeKit heater power, mode, and temperature requests and related Dreo reports at info level."
+        "description": "Logs HomeKit writes, Dreo control commands, and related reports for all supported accessory types at info level."
       },
       "hideTemperatureSensor": {
         "title": "Hide Fan Temperature Sensor",
@@ -67,7 +67,7 @@
         "options.password"
       ]
     },
-    "heaterDiagnosticLogging",
+    "accessoryDiagnosticLogging",
     {
       "type": "fieldset",
       "title": "Temperature Sensor",
