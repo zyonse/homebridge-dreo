@@ -84,6 +84,8 @@ Devices that Dreo reports as offline (unplugged, or disconnected from WiFi) show
 * **Child Lock:** Lock physical heater controls
 * **Hardware Display:** Changes temperature unit on physical hardware display
 
+Enable **Heater Diagnostic Logging** (`heaterDiagnosticLogging`) to trace heater power, mode, and setpoint requests in the Homebridge log without enabling global debug logging. Entries distinguish HomeKit requests, Dreo cloud replies, and device reports. The logs include accessory names and values, so review them before sharing.
+
 ### Humidifiers
 
 #### To see Humidifier "Water Level" and "Fog Level" in HomeKit, you will need to select `Show as Separate Tiles` in HomeKit. An then name the Switches accordingly, i.e. `Sleep Mode` & `Warm Mist`.

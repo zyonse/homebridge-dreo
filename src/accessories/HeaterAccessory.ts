@@ -208,6 +208,7 @@ export class HeaterAccessory extends BaseAccessory {
             switch(key) {
               case 'poweron':
                 this.on = data.reported.poweron;
+                this.logHeaterDiagnostic(`Dreo ${data.method}`, 'power', this.on);
                 this.service.getCharacteristic(this.platform.Characteristic.Active)
                   .updateValue(this.on);
                 this.platform.log.debug('Heater power:', data.reported.poweron);
@@ -216,6 +217,7 @@ export class HeaterAccessory extends BaseAccessory {
                 break;
               case 'mode':
                 this.mode = data.reported.mode;
+                this.logHeaterDiagnostic(`Dreo ${data.method}`, 'mode', this.mode);
                 this.platform.log.debug('Heater mode:', data.reported.mode);
                 // Swap to custom thermostat mode if in 'hotair' mode
                 this.updateThermostatTemp();
@@ -236,17 +238,20 @@ export class HeaterAccessory extends BaseAccessory {
                 break;
               case 'ecolevel':
                 this.targetTemperature = this.convertToCelsius(data.reported.ecolevel);
+                this.logHeaterDiagnostic(`Dreo ${data.method}`, 'Eco target (°F)', data.reported.ecolevel);
                 this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature)
                   .updateValue(this.targetTemperature);
                 this.platform.log.debug('Heater target temperature:', data.reported.ecolevel);
                 break;
               case 'ptcon':
                 this.ptcon = data.reported.ptcon;
+                this.logHeaterDiagnostic(`Dreo ${data.method}`, 'heating element active', this.ptcon);
                 this.updateHeaterState();
                 this.platform.log.debug('Heating active:', this.currState);
                 break;
               case 'htalevel':
                 this.heatLevel = data.reported.htalevel;
+                this.logHeaterDiagnostic(`Dreo ${data.method}`, 'fixed heat level', this.heatLevel);
                 this.updateThermostatTemp();
                 this.platform.log.debug('Heater fixed level:', data.reported.htalevel);
                 break;
@@ -287,6 +292,7 @@ export class HeaterAccessory extends BaseAccessory {
   // Handle requests to set the "Active" characteristic
   setActive(value) {
     this.platform.log.debug('Triggered SET Active:', value);
+    this.logHeaterDiagnostic('HomeKit request', 'power', Boolean(value));
     // Check state to prevent duplicate requests
     if (this.on !== Boolean(value)) {
       // Send to Dreo server via websocket
@@ -308,6 +314,7 @@ export class HeaterAccessory extends BaseAccessory {
   // More details: https://developers.homebridge.io/#/characteristic/TargetHeaterCoolerState
   setTargetHeaterCoolerState(value) {
     this.platform.log.debug('Triggered SET TargetHeaterCoolerState:', value);
+    this.logHeaterDiagnostic('HomeKit request', 'mode (0 Auto, 1 Heat, 2 Cool)', value);
     if (value === 1) {
       this.platform.webHelper.control(this.sn, {'mode': 'eco'});
     } else if (value === 2) {
@@ -334,6 +341,7 @@ export class HeaterAccessory extends BaseAccessory {
 
   // Handle requests for Heating Threshold Temperature
   setHeatingThresholdTemperature(value) {
+    this.logHeaterDiagnostic('HomeKit request', 'heating target (°C)', value);
     if (this.mode === 'eco') {
       this.platform.webHelper.control(this.sn, {'ecolevel': this.convertToFahrenheit(value)});
     } else {
@@ -358,12 +366,18 @@ export class HeaterAccessory extends BaseAccessory {
 
   // Handle requests for Cooling Threshold Temperature
   // We're just using the 'cooling' mode to control fan only mode so the temperature is hardcoded to 0
-  setCoolingThresholdTemperature() {
-    return;
+  setCoolingThresholdTemperature(value) {
+    this.logHeaterDiagnostic('HomeKit request', 'cooling target (°C)', value);
   }
 
   getCoolingThresholdTemperature() {
     return this.minTemp + 8;
+  }
+
+  private logHeaterDiagnostic(source: string, field: string, value: boolean | number | string) {
+    if (this.platform.config.heaterDiagnosticLogging === true) {
+      this.platform.log.info('Heater diagnostics [%s] %s %s = %s', this.accessory.displayName, source, field, value);
+    }
   }
 
   // Turn child lock on/off
