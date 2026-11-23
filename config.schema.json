@@ -67,7 +67,13 @@
         "options.password"
       ]
     },
-    "accessoryDiagnosticLogging",
+    {
+      "type": "fieldset",
+      "title": "Logging",
+      "items": [
+        "accessoryDiagnosticLogging"
+      ]
+    },
     {
       "type": "fieldset",
       "title": "Temperature Sensor",
