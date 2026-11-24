@@ -390,6 +390,15 @@ export class FanAccessory extends BaseAccessory {
     const converted = Math.round((value * this.currState.maxSpeed) / 100);
     // Avoid setting speed to 0 (illegal value)
     if (converted !== 0) {
+      // HomeKit writes the current speed when the slider is touched. Sending it anyway is not
+      // harmless: the device sends no report for a change that does nothing, the cloud then
+      // holds the command for a few seconds, and if the user turns the fan off meanwhile the
+      // late power-on + speed arrives after the off and turns the fan back on.
+      const currentWindlevel = Math.round((this.currState.speed * this.currState.maxSpeed) / 100);
+      if (this.currState.on && converted === currentWindlevel) {
+        this.platform.log.debug('Fan speed already', converted, '- not sending');
+        return;
+      }
       this.platform.log.debug('Setting fan speed:', converted);
       this.requestedWindlevel = converted;
       this.requestedWindlevelAt = Date.now();
