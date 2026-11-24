@@ -109,9 +109,13 @@ export class DreoPlatform implements DynamicPlatformPlugin {
     // Create a set of UUIDs for the currently discovered devices
     const discoveredDeviceUUIDs = new Set(dreoDevices.map(device => this.api.hap.uuid.generate(device.sn)));
 
-    // Unregister accessories that are no longer present
+    // Unregister accessories that are no longer present. An empty list is far more likely to be a
+    // cloud hiccup than every device being removed from the account, and unregistering drops the
+    // accessories' rooms, scenes and automations in HomeKit, so keep them in that case.
     const accessoriesToRemove = this.accessories.filter(accessory => !discoveredDeviceUUIDs.has(accessory.UUID));
-    if (accessoriesToRemove.length > 0) {
+    if (dreoDevices.length === 0 && accessoriesToRemove.length > 0) {
+      this.log.warn('Dreo returned no devices; keeping %d cached accessories', accessoriesToRemove.length);
+    } else if (accessoriesToRemove.length > 0) {
       this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, accessoriesToRemove);
       this.log.info('Removing accessories:', accessoriesToRemove.map(accessory => accessory.displayName).join(', '));
     }

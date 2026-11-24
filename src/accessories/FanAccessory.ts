@@ -22,6 +22,11 @@ const DEVICE_FALLBACK_CONFIGS: Record<string, { maxSpeed: number }> = {
   'DR-HTF024S': { maxSpeed: 9 },
 };
 
+// How long after a speed request reports of any other speed are kept out of HomeKit.
+// Commands are paced, so while the slider is dragged the device reports each speed it
+// passes through, arriving after HomeKit has already moved on to a newer one.
+const SPEED_REPORT_HOLD_MS = 4000;
+
 /**
  * Platform Accessory
  * An instance of this class is created for each accessory your platform registers
@@ -31,6 +36,10 @@ export class FanAccessory extends BaseAccessory {
   private service: Service;
   private temperatureService?: Service;
   private lightService?: Service;
+
+  // Latest speed HomeKit asked for, see SPEED_REPORT_HOLD_MS
+  private requestedWindlevel?: number;
+  private requestedWindlevelAt = 0;
 
   // Cached copy of latest fan states
   private currState = {
@@ -242,12 +251,17 @@ export class FanAccessory extends BaseAccessory {
                 this.platform.log.debug('Fan power:', data.reported.fanon);
                 break;
               case 'windlevel':
+                this.platform.log.debug('Fan speed:', data.reported.windlevel);
+                // A control-reply echoes our own command, which HomeKit already shows, and
+                // a report of an older speed would drag the slider back through it
+                if (data.method === 'control-reply' || this.isStaleSpeedReport(data.reported.windlevel)) {
+                  break;
+                }
                 this.currState.speed =
                   (data.reported.windlevel * 100) / this.currState.maxSpeed;
                 this.service
                   .getCharacteristic(this.platform.Characteristic.RotationSpeed)
                   .updateValue(this.currState.speed);
-                this.platform.log.debug('Fan speed:', data.reported.windlevel);
                 break;
               case 'shakehorizon':
                 this.currState.swing = data.reported.shakehorizon;
@@ -355,13 +369,14 @@ export class FanAccessory extends BaseAccessory {
   // Handle requests to set the "Active" characteristic
   setActive(value) {
     this.platform.log.debug('Triggered SET Active:', value);
-    // Check state to prevent duplicate requests
-    if (this.currState.on !== Boolean(value)) {
-      // Send to Dreo server via websocket
-      this.platform.webHelper.control(this.sn, {
-        [this.currState.powerCMD]: Boolean(value),
-      });
-    }
+    const isActive = Boolean(value);
+    this.currState.on = isActive;
+    // When HomeKit turns the fan on at a speed (scenes, slider from off) it writes
+    // Active and RotationSpeed together; the command queue merges the two into a
+    // single power-on + windlevel message
+    this.platform.webHelper.control(this.sn, {
+      [this.currState.powerCMD]: isActive,
+    });
   }
 
   // Handle requests to get the current value of the "Active" characteristic
@@ -375,7 +390,20 @@ export class FanAccessory extends BaseAccessory {
     const converted = Math.round((value * this.currState.maxSpeed) / 100);
     // Avoid setting speed to 0 (illegal value)
     if (converted !== 0) {
+      // HomeKit writes the current speed when the slider is touched. Sending it anyway is not
+      // harmless: the device sends no report for a change that does nothing, the cloud then
+      // holds the command for a few seconds, and if the user turns the fan off meanwhile the
+      // late power-on + speed arrives after the off and turns the fan back on.
+      const currentWindlevel = Math.round((this.currState.speed * this.currState.maxSpeed) / 100);
+      if (this.currState.on && converted === currentWindlevel) {
+        this.platform.log.debug('Fan speed already', converted, '- not sending');
+        return;
+      }
       this.platform.log.debug('Setting fan speed:', converted);
+      this.requestedWindlevel = converted;
+      this.requestedWindlevelAt = Date.now();
+      this.currState.on = true;
+      this.currState.speed = value;
       // Setting power state to true ensures the fan is actually on
       this.platform.webHelper.control(this.sn, {
         [this.currState.powerCMD]: true,
@@ -384,12 +412,19 @@ export class FanAccessory extends BaseAccessory {
     }
   }
 
+  private isStaleSpeedReport(windlevel: number) {
+    return this.requestedWindlevel !== undefined &&
+      windlevel !== this.requestedWindlevel &&
+      Date.now() - this.requestedWindlevelAt < SPEED_REPORT_HOLD_MS;
+  }
+
   async getRotationSpeed() {
     return this.currState.speed;
   }
 
   // Turn oscillation on/off
   async setSwingMode(value) {
+    this.currState.swing = Boolean(value);
     this.platform.webHelper.control(this.sn, {
       [this.currState.swingCMD]:
         this.currState.swingCMD === 'oscmode' ? Number(value) : Boolean(value),
@@ -402,6 +437,7 @@ export class FanAccessory extends BaseAccessory {
 
   // Set fan mode
   async setMode(value) {
+    this.currState.autoMode = value === this.platform.Characteristic.TargetFanState.AUTO;
     this.platform.webHelper.control(this.sn, {
       mode: value === this.platform.Characteristic.TargetFanState.AUTO ? 4 : 1,
     });
@@ -413,6 +449,7 @@ export class FanAccessory extends BaseAccessory {
 
   // Turn child lock on/off
   async setLockPhysicalControls(value) {
+    this.currState.lockPhysicalControls = Boolean(value);
     this.platform.webHelper.control(this.sn, { childlockon: Number(value) });
   }
 
@@ -437,6 +474,7 @@ export class FanAccessory extends BaseAccessory {
 
   setLightOn(value: any) {
     this.platform.log.debug('Triggered SET Light On:', value);
+    this.currState.lightOn = Boolean(value);
     this.platform.webHelper.control(this.sn, { lighton: Boolean(value) });
   }
 
@@ -446,6 +484,7 @@ export class FanAccessory extends BaseAccessory {
 
   setBrightness(value) {
     this.platform.log.debug('Triggered SET Brightness:', value);
+    this.currState.brightness = value;
     this.platform.webHelper.control(this.sn, { brightness: value });
   }
 

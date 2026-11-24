@@ -287,11 +287,11 @@ export class HeaterAccessory extends BaseAccessory {
   // Handle requests to set the "Active" characteristic
   setActive(value) {
     this.platform.log.debug('Triggered SET Active:', value);
-    // Check state to prevent duplicate requests
-    if (this.on !== Boolean(value)) {
-      // Send to Dreo server via websocket
-      this.platform.webHelper.control(this.sn, {'poweron': Boolean(value)});
-    }
+    const isActive = Boolean(value);
+    this.on = isActive;
+    // Send to Dreo server via websocket
+    this.platform.webHelper.control(this.sn, {'poweron': isActive});
+    this.updateHeaterState();
   }
 
   // Handle requests to get the current value of the "Active" characteristic
@@ -309,12 +309,16 @@ export class HeaterAccessory extends BaseAccessory {
   setTargetHeaterCoolerState(value) {
     this.platform.log.debug('Triggered SET TargetHeaterCoolerState:', value);
     if (value === 1) {
+      this.mode = 'eco';
       this.platform.webHelper.control(this.sn, {'mode': 'eco'});
     } else if (value === 2) {
+      this.mode = 'coolair';
       this.platform.webHelper.control(this.sn, {'mode': 'coolair'});
     } else if (value === 0) {
+      this.mode = 'hotair';
       this.platform.webHelper.control(this.sn, {'mode': 'hotair'});
     }
+    this.updateHeaterState();
   }
 
   getTargetHeaterCoolerState() {
@@ -334,6 +338,7 @@ export class HeaterAccessory extends BaseAccessory {
 
   // Handle requests for Heating Threshold Temperature
   setHeatingThresholdTemperature(value) {
+    this.targetTemperature = value;
     if (this.mode === 'eco') {
       this.platform.webHelper.control(this.sn, {'ecolevel': this.convertToFahrenheit(value)});
     } else {
@@ -342,10 +347,12 @@ export class HeaterAccessory extends BaseAccessory {
        * We'll map the bottom 3 degree increments of the fan to these levels
        * So if the minTemp is 5C, {5: 1, 5.5: 2, 6: 3}
        */
-      value = ((value - this.minTemp) * 2) + 1;
-      value = Math.min(value, 3);  // Ensure speed is within range
-      this.platform.webHelper.control(this.sn, {'htalevel': value});
+      let level = ((value - this.minTemp) * 2) + 1;
+      level = Math.min(level, 3);  // Ensure speed is within range
+      this.heatLevel = level;
+      this.platform.webHelper.control(this.sn, {'htalevel': level});
     }
+    this.updateThermostatTemp();
   }
 
   getHeatingThresholdTemperature() {
@@ -368,6 +375,7 @@ export class HeaterAccessory extends BaseAccessory {
 
   // Turn child lock on/off
   setLockPhysicalControls(value) {
+    this.childLockOn = Boolean(value);
     this.platform.webHelper.control(this.sn, {'childlockon': Boolean(value)});
   }
 
@@ -377,6 +385,7 @@ export class HeaterAccessory extends BaseAccessory {
 
   // Handle requests for Rotation Speed
   setRotationSpeed(value) {
+    this.oscAngle = value;
     this.platform.webHelper.control(this.sn, {'oscangle': this.oscMap[value]});
   }
 
@@ -386,6 +395,7 @@ export class HeaterAccessory extends BaseAccessory {
 
   // Handle requests for Temperature Display Units
   setTemperatureDisplayUnits(value) {
+    this.tempUnit = value === 1;
     this.platform.webHelper.control(this.sn, {'tempunit': value === 1 ? 1 : 2});
   }
 
@@ -395,6 +405,7 @@ export class HeaterAccessory extends BaseAccessory {
 
   // Handle requests for Swing Mode
   setSwingMode(value) {
+    this.swing = Boolean(value);
     if (this.canSetAngle) {
       // If fan supports setting specific angles, we need to set angle to 0 for oscillation mode
       if (value === 1) {
